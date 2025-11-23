@@ -2,7 +2,8 @@
 #include <iostream>
 #include <cmath>
 
-MicrophoneReader::MicrophoneReader() : capture_handle(nullptr) {}
+MicrophoneReader::MicrophoneReader() 
+    : capture_handle(nullptr), device_name("default") {}
 
 MicrophoneReader::~MicrophoneReader() {
     cleanup();
@@ -11,12 +12,12 @@ MicrophoneReader::~MicrophoneReader() {
 bool MicrophoneReader::initialize() {
     int err;
     
-    // Open default microphone device
-    err = snd_pcm_open(&capture_handle, "default", 
+    // Open selected microphone device
+    err = snd_pcm_open(&capture_handle, device_name.c_str(), 
                       SND_PCM_STREAM_CAPTURE, 0);
     if (err < 0) {
-        std::cerr << "Cannot open audio device: " 
-                  << snd_strerror(err) << std::endl;
+        std::cerr << "Cannot open audio device '" << device_name 
+                  << "': " << snd_strerror(err) << std::endl;
         return false;
     }
     
@@ -45,9 +46,71 @@ bool MicrophoneReader::initialize() {
     
     snd_pcm_prepare(capture_handle);
     
-    std::cout << "Microphone initialized successfully!" << std::endl;
+    std::cout << "Microphone initialized successfully on device: " 
+              << device_name << std::endl;
     return true;
 }
+
+std::vector<std::string> MicrophoneReader::listDevices() {
+    std::vector<std::string> devices;
+    snd_ctl_card_info_t* cardinfo;
+    snd_pcm_info_t* pcminfo;
+    snd_ctl_t* handle;
+    int card = -1;
+    
+    snd_ctl_card_info_alloca(&cardinfo);
+    snd_pcm_info_alloca(&pcminfo);
+    
+    std::cout << "\nAvailable microphone devices:\n" << std::endl;
+    
+    while (snd_card_next(&card) == 0 && card >= 0) {
+        std::string cardname = "hw:" + std::to_string(card);
+        
+        if (snd_ctl_open(&handle, cardname.c_str(), 0) < 0) {
+            continue;
+        }
+        
+        if (snd_ctl_card_info(handle, cardinfo) < 0) {
+            snd_ctl_close(handle);
+            continue;
+        }
+        
+        int device = -1;
+        while (snd_ctl_pcm_next_device(handle, &device) == 0 && device >= 0) {
+            snd_pcm_info_set_device(pcminfo, device);
+            snd_pcm_info_set_subdevice(pcminfo, 0);
+            snd_pcm_info_set_stream(pcminfo, SND_PCM_STREAM_CAPTURE);
+            
+            if (snd_ctl_pcm_info(handle, pcminfo) < 0) {
+                continue;
+            }
+            
+            std::string fullname = "hw:" + std::to_string(card) + 
+                                   "," + std::to_string(device);
+            std::string description = std::string(snd_ctl_card_info_get_name(cardinfo)) +
+                                     " - " + std::string(snd_pcm_info_get_name(pcminfo));
+            
+            devices.push_back(fullname);
+            std::cout << "  [" << devices.size() - 1 << "] " 
+                      << fullname << " - " << description << std::endl;
+        }
+        
+        snd_ctl_close(handle);
+    }
+    
+    // Add default device
+    devices.insert(devices.begin(), "default");
+    std::cout << "  [0] default - Default microphone device\n" << std::endl;
+    
+    return devices;
+}
+
+bool MicrophoneReader::selectDevice(const std::string& device) {
+    device_name = device;
+    std::cout << "Selected device: " << device_name << std::endl;
+    return true;
+}
+
 
 double MicrophoneReader::calculateRMS(const std::vector<short>& buffer, 
                                       int frames) {
@@ -88,8 +151,6 @@ void MicrophoneReader::processAudio() {
         // Display real-time volume
         displayVolumeBar(volume);
     }
-
-    
 }
 
 void MicrophoneReader::cleanup() {

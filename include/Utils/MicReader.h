@@ -3,10 +3,12 @@
 
 #include <alsa/asoundlib.h>
 #include <vector>
+#include <string>
 
 class MicrophoneReader {
 private:
     snd_pcm_t* capture_handle;
+    std::string device_name;
     const int SAMPLE_RATE = 44100;
     const int CHANNELS = 1;
     const int FRAMES = 128;
@@ -18,6 +20,8 @@ public:
     MicrophoneReader();
     ~MicrophoneReader();
     
+    std::vector<std::string> listDevices();
+    bool selectDevice(const std::string& device);
     bool initialize();
     void processAudio();
     void cleanup();
