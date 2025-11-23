@@ -1,0 +1,70 @@
+# Build directories
+build/
+cmake-build-*/
+dist/
+*.o
+*.a
+*.so
+*.dylib
+*.dll
+
+# CMake
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+*.cmake
+compile_commands.json
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+*.user
+*.VC.db
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.Python
+env/
+venv/
+
+# Dependencies
+include/*/
+lib/*/
+third_party/*/
+!include/Utils/
+
+# Executables
+NeuralMic
+*.exe
+*.out
+
+# Temporary files
+*.tmp
+*.log
+.cache/
+.ccache/
+
+# ALSA config
+.asoundrc.local
+
+# Debug symbols
+*.dSYM/
+*.su
+*.gch
+*.pch
+
+# Coverage
+*.gcda
+*.gcno
+coverage/
+
+# Clang
+.clang-format.local
