@@ -18,7 +18,10 @@ private:
     const int CHANNELS = 1;
     const int FRAMES = 512;
     
-    double calculateRMS(const std::vector<short>& buffer, int frames);
+    bool setupPCM(snd_pcm_t*& handle, const std::string& device, snd_pcm_stream_t stream);
+    std::vector<std::string> listPCMDevices(snd_pcm_stream_t stream, const std::string& type);
+    void writeToPlayback(const short* data, int frames);
+    double calculateRMS(const std::vector<short>& buffer, int num_samples);
     void displayVolumeBar(int volume);
     
 public:
