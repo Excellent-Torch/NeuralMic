@@ -80,6 +80,17 @@ if(HAVE_ONNXRUNTIME)
     target_compile_definitions(NeuralMicLib PUBLIC HAVE_ONNXRUNTIME=1)
 endif()
 
+# Install LAME: sudo apt-get install libmp3lame-dev (on Debian/Ubuntu)
+# Link LAME library
+find_library(LAME_LIB mp3lame)
+if(LAME_LIB)
+    target_compile_definitions(NeuralMicLib PRIVATE USE_MP3)
+    target_link_libraries(NeuralMicLib PRIVATE ${LAME_LIB})
+    message(STATUS "MP3 support enabled")
+else()
+    message(WARNING "LAME not found, MP3 disabled")
+endif()
+
 # ============================================================================
 # EXECUTABLE: NeuralMic
 # ============================================================================

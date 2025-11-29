@@ -1,4 +1,5 @@
 #include "Utils/MicReader.h"
+#include "Utils/AudReader.h"    
 #include "Core/OnnxInference.h"
 #include <iostream>
 #include <string>
@@ -81,10 +82,27 @@ static int run_mic_test() {
     return 0;
 }
 
+// Audio Reader Test Application
+static int run_audio_reader_test(const std::string& in_path, const std::string& out_path) {
+    try {
+        AudioFile audio;
+        AudioIO::load(in_path, audio);      // Auto-detects format
+        AudioUtils::normalize(audio);           // Process
+        AudioIO::save(out_path, audio);     // Save
+        return 0;
+    } catch (const std::exception& e) {
+        std::cerr << "Audio Reader error: " << e.what() << "\n";
+        return 1;
+    }
+}
+    
+
 int main() {
     // Uncomment to run file mode test
     //return run_file_mode("/home/torch/Music/jackhammer.wav", "/home/torch/Music/out.wav");
 
+    // Audio Reader test mode
+    return run_audio_reader_test("/home/torch/Music/jackhammerm.mp3", "/home/torch/Music/output.mp3");
     // Microphone test mode
-    return run_mic_test();
+    //return run_mic_test();
 }
