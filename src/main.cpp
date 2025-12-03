@@ -5,33 +5,49 @@
 #include <string>
 #include <filesystem>
 
-#ifdef HAVE_ONNXRUNTIME
-using ModelAvailable = std::true_type;
-#else
-using ModelAvailable = std::false_type;
-#endif
 
-// Under Development: File mode to denoise a WAV file using DeepFilterNet
+
 static int run_file_mode(const std::string& in_path, const std::string& out_path) {
-#ifdef HAVE_ONNXRUNTIME
     try {
-        const std::string model = "/media/warehouse/Projects/NeuralMic/assets/models/enc.onnx";
+        const std::string model = "/media/warehouse/Projects/NeuralMic/assets/models/DeepFilterNetV3.onnx";
         std::cout << "Loading model: " << std::filesystem::current_path() << "\n";
         DeepFilterNet denoiser(model);
-        auto audio = load_wav(in_path);
+        denoiser.verify_model_io();
+        
+        AudioFile audio;
+        AudioIO::load(in_path, audio);
+        AudioUtils::normalize(audio);
+        AudioUtils::stereoToMono(audio);
+
         std::cout << "Processing " << audio.samples.size() << " samples...\n";
-        audio.samples = denoiser.denoise(audio.samples);
-        save_wav(out_path, audio);
+
+        std::vector<float> float_samples;
+        float_samples.reserve(audio.samples.size());
+
+        for (const auto& sample : audio.samples) {
+            float_samples.push_back(static_cast<float>(sample));
+        }
+
+        std::vector<float> denoised = denoiser.denoise(float_samples);
+
+        audio.samples.clear();
+        audio.samples.reserve(denoised.size());
+        
+        for (const auto& sample : denoised) {
+            audio.samples.push_back(static_cast<int16_t>(sample));
+        }
+        AudioUtils::monoToStereo(audio);
+
+        AudioIO::save(out_path, audio);
         std::cout << "Saved: " << out_path << "\n";
         return 0;
     } catch (const std::exception& e) {
         std::cerr << "Denoise error: " << e.what() << "\n";
         return 1;
     }
-#else
+
     std::cerr << "ONNX Runtime support not available. Rebuild with ONNX enabled.\n";
     return 2;
-#endif
 }
 
 
@@ -99,10 +115,10 @@ static int run_audio_reader_test(const std::string& in_path, const std::string& 
 
 int main() {
     // Uncomment to run file mode test
-    //return run_file_mode("/home/torch/Music/jackhammer.wav", "/home/torch/Music/out.wav");
+    return run_file_mode("/home/torch/Music/jackhammerw.wav", "/home/torch/Music/out.wav");
 
     // Audio Reader test mode
-    return run_audio_reader_test("/home/torch/Music/jackhammerm.mp3", "/home/torch/Music/output.mp3");
+    //return run_audio_reader_test("/home/torch/Music/jackhammerm.mp3", "/home/torch/Music/output.mp3");
     // Microphone test mode
     //return run_mic_test();
 }
