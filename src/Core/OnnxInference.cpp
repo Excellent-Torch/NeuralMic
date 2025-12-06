@@ -3,6 +3,18 @@
 #include <cstring>
 #include <stdexcept>
 #include <iostream>
+#include <string>
+#include <filesystem>
+
+using std::vector; 
+using std::string;
+using std::fill;
+using std::cout;
+using std::array;
+using std::runtime_error;
+using std::move;
+using std::copy;
+using std::cerr;
 
 DeepFilterNet::DeepFilterNet(const std::string& model_path) 
     : env_(ORT_LOGGING_LEVEL_WARNING, "DenoiserInference"),
@@ -12,182 +24,157 @@ DeepFilterNet::DeepFilterNet(const std::string& model_path)
       allocator(),
       state_(STATE_SIZE, 0.0f),
       atten_lim_db_(0.0f) {
-    
-    //session_options_.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_EXTENDED);
-    //session_options_.SetIntraOpNumThreads(1);
-    //session_options_.SetInterOpNumThreads(1);
-    //session_options_.SetExecutionMode(ExecutionMode::ORT_SEQUENTIAL);
+
+    session_options_.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_EXTENDED);
+    session_options_.SetIntraOpNumThreads(1);
+    session_options_.SetInterOpNumThreads(1);
+    session_options_.SetExecutionMode(ExecutionMode::ORT_SEQUENTIAL);
     
     session_ = Ort::Session(env_, model_path.c_str(), session_options_);
+    PrintModelSummary();
 }
 
-DeepFilterNet::~DeepFilterNet() {    }
-
+DeepFilterNet::~DeepFilterNet() {  }
 
 void DeepFilterNet::reset() {
     std::fill(state_.begin(), state_.end(), 0.0f);
-    atten_lim_db_ = 0.0f;
 }
 
-std::vector<float> DeepFilterNet::denoise_frame(const std::vector<float>& frame) {
+void DeepFilterNet::SetNoiseSuppressionStrength(float db) 
+{
+    // db range: -100.0 (very aggressive) to -50.0 (gentle)
+    atten_lim_db_ = std::clamp(db, -100.0f, 0.0f);
+    cout << "Attenuation set to: " << atten_lim_db_ << " dB\n";
+}
+
+vector<float> DeepFilterNet::ApplyNoiseSuppression(const vector<float>& audio) {
+    if (audio.empty()) {
+        throw std::runtime_error("Input audio is empty");
+    }
+
+    // Prepare padded audio
+    auto padded = GetPaddedAudio(audio);
+    int orig_len = audio.size() + ((HOP_SIZE - (audio.size() % HOP_SIZE)) % HOP_SIZE);
+    
+    cout << "Processing " << (padded.size() / HOP_SIZE) << " frames...\n";
+
+    // Process each frame
+    vector<float> enhanced;
+    enhanced.reserve(padded.size());
+    
+    for (size_t i = 0; i + HOP_SIZE <= padded.size(); i += HOP_SIZE) {
+        vector<float> frame(padded.begin() + i, padded.begin() + i + HOP_SIZE);
+        auto enhanced_frame = GetEnhancedFrame(frame);
+        enhanced.insert(enhanced.end(), enhanced_frame.begin(), enhanced_frame.end());
+    }
+
+    // Trim padding and return
+    return GetTrimmedOutput(enhanced, orig_len);
+}
+
+vector<float> DeepFilterNet::GetPaddedAudio(const vector<float>& audio) {
+    int hop_padding = (HOP_SIZE - (audio.size() % HOP_SIZE)) % HOP_SIZE;
+    int total_padding = FFT_SIZE + hop_padding;
+    
+    vector<float> padded = audio;
+    padded.resize(audio.size() + total_padding, 0.0f);
+    return padded;
+}
+
+vector<float> DeepFilterNet::GetEnhancedFrame(const vector<float>& frame) {
+    // Create input tensors
+    int64_t frame_shape[] = {HOP_SIZE};
+    int64_t state_shape[] = {STATE_SIZE};
+    int64_t atten_shape[] = {1};
+    
+    float atten = atten_lim_db_;
+
+    Ort::Value input_frame = Ort::Value::CreateTensor<float>(
+        memory_info_, const_cast<float*>(frame.data()), frame.size(), frame_shape, 1);
+    
+    Ort::Value input_state = Ort::Value::CreateTensor<float>(
+        memory_info_, state_.data(), state_.size(), state_shape, 1);
+    
+    Ort::Value input_atten = Ort::Value::CreateTensor<float>(
+        memory_info_, &atten, 1, atten_shape, 1);
+
+    // Run inference
     const char* input_names[] = {"input_frame", "states", "atten_lim_db"};
     const char* output_names[] = {"enhanced_audio_frame", "new_states", "lsnr"};
     
-    // Verify frame size
-    if (frame.size() != HOP_SIZE) {
-        throw std::runtime_error("Frame size mismatch: expected " + std::to_string(HOP_SIZE) + 
-                                 " got " + std::to_string(frame.size()));
-    }
-    
-    // Create input data
-    std::vector<float> frame_data(frame);
-    std::vector<float> state_data(state_);
-    float atten_data = atten_lim_db_;
-    
-    // Create tensor shapes
-    std::vector<int64_t> frame_shape = {HOP_SIZE};
-    std::vector<int64_t> state_shape = {STATE_SIZE};
-    std::vector<int64_t> atten_shape = {1};  // Empty for scalar
-    
-    // Create input tensors - use persistent data pointers
-    std::vector<Ort::Value> input_tensors;
-    
-    input_tensors.push_back(Ort::Value::CreateTensor<float>(
-        memory_info_, 
-        frame_data.data(), 
-        frame_data.size(), 
-        frame_shape.data(), 
-        frame_shape.size()
-    ));
-    
-    input_tensors.push_back(Ort::Value::CreateTensor<float>(
-        memory_info_, 
-        state_data.data(), 
-        state_data.size(), 
-        state_shape.data(), 
-        state_shape.size()
-    ));
-    
-    input_tensors.push_back(Ort::Value::CreateTensor<float>(
-        memory_info_, 
-        &atten_data, 
-        1, 
-        atten_shape.data(), 
-        atten_shape.size()
-    ));
-    
-    // Run inference
-    std::vector<Ort::Value> output_tensors = session_.Run(
-        Ort::RunOptions{nullptr}, 
-        input_names, 
-        input_tensors.data(), 
-        input_tensors.size(), 
-        output_names, 
-        3
+    Ort::Value inputs[] = {
+        std::move(input_frame),
+        std::move(input_state),
+        std::move(input_atten)
+    };
+
+    auto outputs = session_.Run(
+        Ort::RunOptions{nullptr},
+        input_names, inputs, 3,
+        output_names, 3
     );
+
+    // Extract enhanced frame
+    float* enhanced_data = outputs[0].GetTensorMutableData<float>();
+    size_t enhanced_count = outputs[0].GetTensorTypeAndShapeInfo().GetElementCount();
     
-    // Extract and copy state immediately
-    float* new_state_ptr = output_tensors[1].GetTensorMutableData<float>();
-    auto state_info = output_tensors[1].GetTensorTypeAndShapeInfo();
-    size_t state_size = state_info.GetElementCount();
-    
-    if (state_size != STATE_SIZE) {
-        throw std::runtime_error("State size mismatch from model output");
-    }
-    
-    // Update internal state
-    std::copy(new_state_ptr, new_state_ptr + state_size, state_.begin());
-    
-    
-    float* output_ptr = output_tensors[0].GetTensorMutableData<float>();
-    auto output_info = output_tensors[0].GetTensorTypeAndShapeInfo();
-    size_t output_size = output_info.GetElementCount();
-  
-    std::vector<float> result(output_ptr, output_ptr + output_size);
-    
-    return result;
+    // Update state
+    float* new_state = outputs[1].GetTensorMutableData<float>();
+    size_t state_count = outputs[1].GetTensorTypeAndShapeInfo().GetElementCount();
+    std::copy(new_state, new_state + std::min(state_count, (size_t)STATE_SIZE), state_.begin());
+
+    return vector<float>(enhanced_data, enhanced_data + enhanced_count);
 }
 
-std::vector<float> DeepFilterNet::denoise(const std::vector<float>& input_audio) {
-
-    //Calculate padding 
-    size_t orig_len = input_audio.size();
-    size_t hop_padding = (HOP_SIZE - orig_len % HOP_SIZE) % HOP_SIZE;
+vector<float> DeepFilterNet::GetTrimmedOutput(const vector<float>& enhanced, int orig_len) {
+    int d = FFT_SIZE - HOP_SIZE;
+    int start = d;
+    int end = std::min(orig_len + d, (int)enhanced.size());
     
-    // Update orig_len to include hop padding
-    orig_len += hop_padding;
-    
-    //Pad the input audio - pad on the RIGHT with (fft_size + hop_padding) zeros
-    size_t total_padding = FFT_SIZE + hop_padding;
-    std::vector<float> padded_audio;
-    padded_audio.reserve(input_audio.size() + total_padding);
-    padded_audio.insert(padded_audio.end(), input_audio.begin(), input_audio.end());
-    padded_audio.insert(padded_audio.end(), total_padding, 0.0f);
-    
-    //Split into frames and process
-    size_t num_frames = padded_audio.size() / HOP_SIZE;
-    std::vector<float> enhanced_audio;
-    enhanced_audio.reserve(num_frames * HOP_SIZE);
-    
-    for (size_t i = 0; i < num_frames; ++i) {
-        size_t start = i * HOP_SIZE;
-        
-        // Create frame view without copying
-        std::vector<float> frame(padded_audio.begin() + start, 
-                                 padded_audio.begin() + start + HOP_SIZE);
-        
-        std::vector<float> output_frame = denoise_frame(frame);
-        enhanced_audio.insert(enhanced_audio.end(), output_frame.begin(), output_frame.end());
+    if (start < 0 || start >= end || end > (int)enhanced.size()) {
+        cerr << "Warning: Invalid trim range\n";
+        return enhanced;
     }
     
-    //Remove padding using the delay formula
-    size_t d = FFT_SIZE - HOP_SIZE;
-    
-    if (enhanced_audio.size() < d + orig_len) {
-        throw std::runtime_error("Enhanced audio size mismatch");
-    }
-    
-    std::vector<float> result(enhanced_audio.begin() + d, 
-                              enhanced_audio.begin() + d + orig_len);
-    
-    return result;
+    return vector<float>(enhanced.begin() + start, enhanced.begin() + end);
 }
 
 // verify model input and output details
-void DeepFilterNet::verify_model_io() const {
-    std::cout << "Model Input/Output Information:" << std::endl;
+void DeepFilterNet::PrintModelSummary() const 
+{
+   cout << "\n=== Model I/O Verification ===\n";
     
-    // Get input info
     size_t num_inputs = session_.GetInputCount();
-    std::cout << "Number of inputs: " << num_inputs << std::endl;
+    cout << "Inputs: " << num_inputs << '\n';
     for (size_t i = 0; i < num_inputs; ++i) {
         auto name = session_.GetInputNameAllocated(i, Ort::AllocatorWithDefaultOptions());
         auto type_info = session_.GetInputTypeInfo(i);
         auto tensor_info = type_info.GetTensorTypeAndShapeInfo();
         auto shape = tensor_info.GetShape();
         
-        std::cout << "  Input " << i << ": " << name.get() << " - Shape: [";
+        cout << "  [" << i << "] " << name.get() << " - Shape: [";
         for (size_t j = 0; j < shape.size(); ++j) {
-            std::cout << shape[j];
-            if (j < shape.size() - 1) std::cout << ", ";
+            cout << shape[j];
+            if (j < shape.size() - 1) cout << ", ";
         }
-        std::cout << "]" << std::endl;
+        cout << "]\n";
     }
     
-    // Get output info
     size_t num_outputs = session_.GetOutputCount();
-    std::cout << "Number of outputs: " << num_outputs << std::endl;
+    cout << "Outputs: " << num_outputs << '\n';
     for (size_t i = 0; i < num_outputs; ++i) {
         auto name = session_.GetOutputNameAllocated(i, Ort::AllocatorWithDefaultOptions());
         auto type_info = session_.GetOutputTypeInfo(i);
         auto tensor_info = type_info.GetTensorTypeAndShapeInfo();
         auto shape = tensor_info.GetShape();
         
-        std::cout << "  Output " << i << ": " << name.get() << " - Shape: [";
+        cout << "  [" << i << "] " << name.get() << " - Shape: [";
         for (size_t j = 0; j < shape.size(); ++j) {
-            std::cout << shape[j];
-            if (j < shape.size() - 1) std::cout << ", ";
+            cout << shape[j];
+            if (j < shape.size() - 1) cout << ", ";
         }
-        std::cout << "]" << std::endl;
+        cout << "]\n";
     }
+    cout << "===========================\n\n";
 }
+

@@ -5,49 +5,90 @@
 #include <string>
 #include <filesystem>
 
+using std::string;
+using std::cout;
+using std::cerr;
+using std::exception;
+using std::vector;
 
-
-static int run_file_mode(const std::string& in_path, const std::string& out_path) {
-    try {
-        const std::string model = "/media/warehouse/Projects/NeuralMic/assets/models/DeepFilterNetV3.onnx";
-        std::cout << "Loading model: " << std::filesystem::current_path() << "\n";
+static int run_file_mode(const string& in_path, const string& out_path) {
+   try {
+        const string model = "../assets/models/DeepFilterNetV3.onnx";
         DeepFilterNet denoiser(model);
-        denoiser.verify_model_io();
+        
+        // Adjust noise reduction strength:
+        //  0.0  = Default (Better)
+        // -100.0 = Aggressive (Lower Voice Quality)
+        // -75.0 = Balanced
+        // -50.0  = Gentle
+        denoiser.SetNoiseSuppressionStrength(0.0f);
         
         AudioFile audio;
         AudioIO::load(in_path, audio);
-        AudioUtils::normalize(audio);
-        AudioUtils::stereoToMono(audio);
+        
+        cout << "Loaded audio:\n";
+        cout << "  Samples: " << audio.samples.size() << "\n";
+        cout << "  Sample rate: " << audio.sampleRate << " Hz\n";
+        cout << "  Channels: " << audio.channels << "\n";
+        cout << "  Duration: " << audio.getDuration() << " seconds\n";
 
-        std::cout << "Processing " << audio.samples.size() << " samples...\n";
-
-        std::vector<float> float_samples;
+        // Convert int16_t to normalized float [-1.0, 1.0]
+        vector<float> float_samples;
         float_samples.reserve(audio.samples.size());
-
+        
         for (const auto& sample : audio.samples) {
-            float_samples.push_back(static_cast<float>(sample));
+            // CRITICAL: Normalize to [-1.0, 1.0] range
+            float_samples.push_back(static_cast<float>(sample) / 32768.0f);
+        }
+        
+        // Check input level
+        float input_peak = 0.0f;
+        for (float s : float_samples) {
+            input_peak = std::max(input_peak, std::abs(s));
+        }
+        cout << "Input peak level: " << input_peak << "\n";
+        
+        if (input_peak < 0.01f) {
+            cerr << "Warning: Input audio is very quiet (peak < 0.01)\n";
         }
 
-        std::vector<float> denoised = denoiser.denoise(float_samples);
+        // Process through denoiser
+        cout << "\nProcessing through DeepFilterNet...\n";
+        vector<float> denoised = denoiser.ApplyNoiseSuppression(float_samples);
+        
+        // Check output level
+        float output_peak = 0.0f;
+        for (float s : denoised) {
+            output_peak = std::max(output_peak, std::abs(s));
+        }
+        cout << "Output peak level: " << output_peak << "\n";
 
+        // Convert back to int16_t with proper scaling and clamping
         audio.samples.clear();
         audio.samples.reserve(denoised.size());
         
         for (const auto& sample : denoised) {
-            audio.samples.push_back(static_cast<int16_t>(sample));
+            // Scale back to int16_t range with clamping
+            float scaled = sample * 32767.0f;
+            int32_t clamped = std::clamp(
+                static_cast<int32_t>(scaled),
+                static_cast<int32_t>(-32768),
+                static_cast<int32_t>(32767)
+            );
+            audio.samples.push_back(static_cast<int16_t>(clamped));
         }
-        AudioUtils::monoToStereo(audio);
 
         AudioIO::save(out_path, audio);
-        std::cout << "Saved: " << out_path << "\n";
+        cout << "\n Saved: " << out_path << "\n";
+        cout << "  Output samples: " << audio.samples.size() << "\n";
+        cout << "  Duration: " << audio.getDuration() << " seconds\n";
+        
         return 0;
-    } catch (const std::exception& e) {
-        std::cerr << "Denoise error: " << e.what() << "\n";
+        
+    } catch (const exception& e) {
+        cerr << "✗ Denoise error: " << e.what() << "\n";
         return 1;
     }
-
-    std::cerr << "ONNX Runtime support not available. Rebuild with ONNX enabled.\n";
-    return 2;
 }
 
 
@@ -115,7 +156,7 @@ static int run_audio_reader_test(const std::string& in_path, const std::string& 
 
 int main() {
     // Uncomment to run file mode test
-    return run_file_mode("/home/torch/Music/jackhammerw.wav", "/home/torch/Music/out.wav");
+    return run_file_mode("../assets/tests/input.wav", "../assets/tests/output.wav");
 
     // Audio Reader test mode
     //return run_audio_reader_test("/home/torch/Music/jackhammerm.mp3", "/home/torch/Music/output.mp3");

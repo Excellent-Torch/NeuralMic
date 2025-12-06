@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.28)
 project(NeuralMic
-    VERSION 2.0.0 
+    VERSION 0.0.1 
     LANGUAGES CXX
     DESCRIPTION "Real-time AI-based noise suppression for Linux"
 )
@@ -51,6 +51,21 @@ else()
     endif()
 endif()
 
+# MP3 Support (LAME library)
+if(ENABLE_MP3)
+    find_library(LAME_LIB mp3lame)
+    if(LAME_LIB)
+        message(STATUS "LAME found: ${LAME_LIB}")
+        set(HAVE_MP3 TRUE)
+    else()
+        message(STATUS "LAME not found (install: sudo apt-get install libmp3lame-dev)")
+        set(HAVE_MP3 FALSE)
+    endif()
+else()
+    set(HAVE_MP3 FALSE)
+endif()
+
+
 # ============================================================================
 # LIBRARY: NeuralMicLib
 # ============================================================================
@@ -68,6 +83,10 @@ target_include_directories(NeuralMicLib PUBLIC
 target_link_libraries(NeuralMicLib PUBLIC
     ${ALSA_LIBRARIES}
 )
+
+# ===========================================================================
+# LINK DEPENDENCIES
+# ============================================================================
 
 # Link ONNX Runtime if available
 if(HAVE_ONNXRUNTIME)
@@ -89,6 +108,12 @@ if(LAME_LIB)
     message(STATUS "MP3 support enabled")
 else()
     message(WARNING "LAME not found, MP3 disabled")
+endif()
+
+# MP3 Support
+if(HAVE_MP3)
+    target_link_libraries(NeuralMicLib PUBLIC ${LAME_LIB})
+    target_compile_definitions(NeuralMicLib PUBLIC HAVE_MP3=1)
 endif()
 
 # ============================================================================
@@ -121,7 +146,8 @@ message(STATUS "  Compiler:       ${CMAKE_CXX_COMPILER_ID}")
 message(STATUS "  Build Type:     ${CMAKE_BUILD_TYPE}")
 message(STATUS "")
 message(STATUS "  Dependencies:")
-message(STATUS "    ALSA:         ✓ FOUND")
+message(STATUS "    ALSA:         ${ALSA_FOUND}")
 message(STATUS "    ONNX Runtime: ${HAVE_ONNXRUNTIME}")
+message(STATUS "    MP3 (LameLib):${HAVE_MP3}")
 message(STATUS "═══════════════════════════════════════════")
 message(STATUS "")
