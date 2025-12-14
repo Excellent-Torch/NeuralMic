@@ -72,6 +72,15 @@ vector<float> DeepFilterNet::ApplyNoiseSuppression(const vector<float>& audio) {
     return GetTrimmedOutput(enhanced, orig_len);
 }
 
+vector<float> DeepFilterNet::ProcessRealtimeFrame(const vector<float>& frame) {
+    if (frame.size() != HOP_SIZE) {
+        throw std::runtime_error("Frame size must be exactly " + std::to_string(HOP_SIZE) + " samples");
+    }
+    
+    // Process frame directly without padding (state persists between calls)
+    return GetEnhancedFrame(frame);
+}
+
 vector<float> DeepFilterNet::GetPaddedAudio(const vector<float>& audio) {
     int hop_padding = (HOP_SIZE - (audio.size() % HOP_SIZE)) % HOP_SIZE;
     int total_padding = FFT_SIZE + hop_padding;

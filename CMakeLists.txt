@@ -73,6 +73,7 @@ endif()
 add_library(NeuralMicLib
     src/Utils/MicReader.cpp
     src/Core/OnnxInference.cpp
+    src/Core/RealtimeDenoiser.cpp
 )
 
 target_include_directories(NeuralMicLib PUBLIC

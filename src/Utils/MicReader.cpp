@@ -1,198 +1,336 @@
 #include "Utils/MicReader.h"
 #include <iostream>
-#include <cmath>
+#include <cstring>
 #include <algorithm>
-#include <chrono>
-#include <thread>
+#include <csignal>
+#include <cmath>
 
-MicrophoneReader::MicrophoneReader() 
-    : capture_handle(nullptr), playback_handle(nullptr),
-      device_name("default"), playback_device_name("default"),
-      monitorEnabled(false) {}
+static volatile bool keep_running = true;
 
-MicrophoneReader::~MicrophoneReader() { cleanup(); }
+void signal_handler(int) {
+    keep_running = false;
+}
 
-bool MicrophoneReader::setupPCM(snd_pcm_t*& handle, const std::string& device, 
-                                 snd_pcm_stream_t stream) {
-    int err = snd_pcm_open(&handle, device.c_str(), stream, 0);
+MicrophoneReader::MicrophoneReader()
+    : capture_handle_(nullptr),
+      playback_handle_(nullptr),
+      monitor_enabled_(false),
+      audio_callback_(nullptr) {
+    std::signal(SIGINT, signal_handler);
+}
+
+MicrophoneReader::~MicrophoneReader() {
+    cleanup();
+}
+
+bool MicrophoneReader::shouldIncludeDevice(const char* name) {
+    if (!name) return false;
+    std::string device(name);
+    return device == "default" || device.find("hw:") == 0 || device.find("plughw:") == 0;
+}
+
+std::vector<std::string> MicrophoneReader::listDevices() {
+    std::vector<std::string> display_names;
+    mic_name_map_.clear();
+    void** hints;
+
+    if (snd_device_name_hint(-1, "pcm", &hints) < 0) {
+        return display_names;
+    }
+
+    void** hint = hints;
+    while (*hint != nullptr) {
+        char* name = snd_device_name_get_hint(*hint, "NAME");
+        char* desc = snd_device_name_get_hint(*hint, "DESC");
+        char* ioid = snd_device_name_get_hint(*hint, "IOID");
+
+        if (shouldIncludeDevice(name) && (ioid == nullptr || strcmp(ioid, "Input") == 0)) {
+            std::string actual_name = name;
+            std::string display_name;
+            
+            if (strcmp(name, "default") == 0) {
+                display_name = "Default Microphone";
+            } else if (desc) {
+                display_name = desc;
+                size_t newline = display_name.find('\n');
+                if (newline != std::string::npos) {
+                    display_name = display_name.substr(0, newline);
+                }
+            } else {
+                display_name = name;
+            }
+            
+            // Check if display name already exists
+            if (mic_name_map_.find(display_name) == mic_name_map_.end()) {
+                display_names.push_back(display_name);
+                mic_name_map_[display_name] = actual_name;
+            }
+        }
+
+        if (name) free(name);
+        if (desc) free(desc);
+        if (ioid) free(ioid);
+        hint++;
+    }
+
+    snd_device_name_free_hint(hints);
+    return display_names;
+}
+
+std::vector<std::string> MicrophoneReader::listPlaybackDevices() {
+   std::vector<std::string> display_names;
+    speaker_name_map_.clear();
+    void** hints;
+
+    if (snd_device_name_hint(-1, "pcm", &hints) < 0) {
+        return display_names;
+    }
+
+    void** hint = hints;
+    while (*hint != nullptr) {
+        char* name = snd_device_name_get_hint(*hint, "NAME");
+        char* desc = snd_device_name_get_hint(*hint, "DESC");
+        char* ioid = snd_device_name_get_hint(*hint, "IOID");
+
+        if (shouldIncludeDevice(name) && (ioid == nullptr || strcmp(ioid, "Output") == 0)) {
+            std::string actual_name = name;
+            std::string display_name;
+            
+            if (strcmp(name, "default") == 0) {
+                display_name = "Default Speakers";
+            } else if (desc) {
+                display_name = desc;
+                size_t newline = display_name.find('\n');
+                if (newline != std::string::npos) {
+                    display_name = display_name.substr(0, newline);
+                }
+            } else {
+                display_name = name;
+            }
+            
+            // Check if display name already exists
+            if (speaker_name_map_.find(display_name) == speaker_name_map_.end()) {
+                display_names.push_back(display_name);
+                speaker_name_map_[display_name] = actual_name;
+            }
+        }
+
+        if (name) free(name);
+        if (desc) free(desc);
+        if (ioid) free(ioid);
+        hint++;
+    }
+
+    snd_device_name_free_hint(hints);
+    return display_names;
+}
+
+bool MicrophoneReader::selectDevice(const std::string& display_name) {
+    auto it = mic_name_map_.find(display_name);
+    if (it != mic_name_map_.end()) {
+        selected_device_ = it->second;
+        std::cout << "Selected mic: " << display_name << " (" << selected_device_ << ")\n";
+        return true;
+    }
+    std::cerr << "Device not found: " << display_name << "\n";
+    return false;
+}
+
+bool MicrophoneReader::selectPlaybackDevice(const std::string& display_name) {
+    auto it = speaker_name_map_.find(display_name);
+    if (it != speaker_name_map_.end()) {
+        selected_playback_device_ = it->second;
+        std::cout << "Selected speaker: " << display_name << " (" << selected_playback_device_ << ")\n";
+        return true;
+    }
+    std::cerr << "Device not found: " << display_name << "\n";
+    return false;
+}
+
+void MicrophoneReader::setMonitorEnabled(bool enabled) {
+    monitor_enabled_ = enabled;
+}
+
+void MicrophoneReader::setAudioCallback(AudioCallback callback) {
+    audio_callback_ = callback;
+}
+
+bool MicrophoneReader::setupDevice(snd_pcm_t** handle, const std::string& device, snd_pcm_stream_t stream) {
+    int err = snd_pcm_open(handle, device.c_str(), stream, 0);
     if (err < 0) {
-        std::cerr << "Cannot open device '" << device << "': " << snd_strerror(err) << std::endl;
+        std::cerr << "Cannot open device " << device << ": " << snd_strerror(err) << "\n";
         return false;
     }
+
+    snd_pcm_hw_params_t* hw_params;
+    snd_pcm_hw_params_alloca(&hw_params);
+    snd_pcm_hw_params_any(*handle, hw_params);
+    snd_pcm_hw_params_set_access(*handle, hw_params, SND_PCM_ACCESS_RW_INTERLEAVED);
+    snd_pcm_hw_params_set_format(*handle, hw_params, SND_PCM_FORMAT_S16_LE);
+    snd_pcm_hw_params_set_channels(*handle, hw_params, channels_);
+    snd_pcm_hw_params_set_rate_near(*handle, hw_params, const_cast<unsigned int*>(&sample_rate_), 0);
     
-    err = snd_pcm_set_params(handle, SND_PCM_FORMAT_S16_LE, 
-                             SND_PCM_ACCESS_RW_INTERLEAVED,
-                             CHANNELS, SAMPLE_RATE, 1, 50000);
+    snd_pcm_uframes_t buffer_size = frame_size_ * 8;
+    snd_pcm_hw_params_set_buffer_size_near(*handle, hw_params, &buffer_size);
+    
+    snd_pcm_uframes_t period_size = frame_size_;
+    snd_pcm_hw_params_set_period_size_near(*handle, hw_params, &period_size, 0);
+
+    err = snd_pcm_hw_params(*handle, hw_params);
     if (err < 0) {
-        std::cerr << "Cannot set params: " << snd_strerror(err) << std::endl;
-        snd_pcm_close(handle);
-        handle = nullptr;
+        std::cerr << "Cannot set hw parameters: " << snd_strerror(err) << "\n";
         return false;
     }
+
+    snd_pcm_sw_params_t* sw_params;
+    snd_pcm_sw_params_alloca(&sw_params);
+    snd_pcm_sw_params_current(*handle, sw_params);
+    snd_pcm_sw_params_set_start_threshold(*handle, sw_params, buffer_size / 2);
+    snd_pcm_sw_params_set_avail_min(*handle, sw_params, period_size);
+    snd_pcm_sw_params(*handle, sw_params);
+
     return true;
 }
 
 bool MicrophoneReader::initialize() {
-    if (!setupPCM(capture_handle, device_name, SND_PCM_STREAM_CAPTURE))
+    if (selected_device_.empty()) {
+        std::cerr << "No device selected\n";
         return false;
+    }
 
-    if (monitorEnabled.load()) {
-        if (setupPCM(playback_handle, playback_device_name, SND_PCM_STREAM_PLAYBACK)) {
-            std::cout << "Playback initialized on: " << playback_device_name << std::endl;
+    if (!setupDevice(&capture_handle_, selected_device_, SND_PCM_STREAM_CAPTURE)) {
+        return false;
+    }
+
+    // Always open playback if monitoring is enabled OR if playback device is selected
+    if (monitor_enabled_ || !selected_playback_device_.empty()) {
+        std::string pb_device = selected_playback_device_.empty() ? "default" : selected_playback_device_;
+        std::cout << "Opening playback device: " << pb_device << "\n";
+        
+        if (!setupDevice(&playback_handle_, pb_device, SND_PCM_STREAM_PLAYBACK)) {
+            std::cerr << "✗ Failed to open playback device: " << pb_device << "\n";
+            playback_handle_ = nullptr;
         } else {
-            playback_handle = nullptr;
+            std::cout << "✓ Playback device opened successfully\n";
+            // Prepare the playback device
+            snd_pcm_prepare(playback_handle_);
         }
     }
 
-    std::cout << "Microphone initialized on: " << device_name << std::endl;
+    std::cout << "\n Audio initialized:\n";
+    std::cout << "  Sample rate: " << sample_rate_ << " Hz\n";
+    std::cout << "  Channels: " << channels_ << "\n";
+    std::cout << "  Frame size: " << frame_size_ << " samples\n";
+    std::cout << "  Monitoring: " << (monitor_enabled_ ? "ENABLED" : "DISABLED") << "\n";
+    
     return true;
-}
-
-std::vector<std::string> MicrophoneReader::listDevices() {
-    return listPCMDevices(SND_PCM_STREAM_CAPTURE, "microphone");
-}
-
-std::vector<std::string> MicrophoneReader::listPlaybackDevices() {
-    return listPCMDevices(SND_PCM_STREAM_PLAYBACK, "playback");
-}
-
-std::vector<std::string> MicrophoneReader::listPCMDevices(snd_pcm_stream_t stream,
-                                                          const std::string& type) {
-    std::vector<std::string> devices = {"default"};
-    snd_ctl_card_info_t* cardinfo;
-    snd_pcm_info_t* pcminfo;
-    snd_ctl_t* handle;
-    int card = -1;
-    
-    snd_ctl_card_info_alloca(&cardinfo);
-    snd_pcm_info_alloca(&pcminfo);
-    
-    std::cout << "\nAvailable " << type << " devices:\n  [0] default\n" << std::endl;
-    
-    while (snd_card_next(&card) == 0 && card >= 0) {
-        std::string cardname = "hw:" + std::to_string(card);
-        if (snd_ctl_open(&handle, cardname.c_str(), 0) < 0) continue;
-        if (snd_ctl_card_info(handle, cardinfo) < 0) {
-            snd_ctl_close(handle);
-            continue;
-        }
-        
-        int device = -1;
-        while (snd_ctl_pcm_next_device(handle, &device) == 0 && device >= 0) {
-            snd_pcm_info_set_device(pcminfo, device);
-            snd_pcm_info_set_stream(pcminfo, stream);
-            
-            if (snd_ctl_pcm_info(handle, pcminfo) < 0) continue;
-            
-            std::string fullname = "hw:" + std::to_string(card) + "," + std::to_string(device);
-            std::string desc = std::string(snd_ctl_card_info_get_name(cardinfo)) +
-                              " - " + std::string(snd_pcm_info_get_name(pcminfo));
-            
-            devices.push_back(fullname);
-            std::cout << "  [" << devices.size() - 1 << "] " << desc << std::endl;
-        }
-        snd_ctl_close(handle);
-    }
-    std::cout << std::endl;
-    return devices;
-}
-
-bool MicrophoneReader::selectDevice(const std::string& device) {
-    device_name = device;
-    std::cout << "Selected device: " << device_name << std::endl;
-    return true;
-}
-
-bool MicrophoneReader::selectPlaybackDevice(const std::string& device) {
-    playback_device_name = device;
-    std::cout << "Selected playback device: " << playback_device_name << std::endl;
-    return true;
-}
-
-void MicrophoneReader::setMonitorEnabled(bool enabled) {
-    monitorEnabled.store(enabled);
-    std::cout << "Monitor: " << (enabled ? "ON" : "OFF") << std::endl;
-}
-
-double MicrophoneReader::calculateRMS(const std::vector<short>& buffer, int num_samples) {
-    if (num_samples <= 0) return 0.0;
-    double sum = 0.0;
-    for (int i = 0; i < num_samples; ++i) {
-        sum += static_cast<double>(buffer[i]) * buffer[i];
-    }
-    return std::sqrt(sum / num_samples);
-}
-
-void MicrophoneReader::displayVolumeBar(int volume) {
-    std::cout << "\rVolume: [";
-    for (int i = 0; i < 50; i++) 
-        std::cout << (i < volume / 2 ? "=" : " ");
-    std::cout << "] " << volume << "%  " << std::flush;
-}
-
-void MicrophoneReader::writeToPlayback(const short* data, int frames) {
-    if (!playback_handle || frames <= 0) return;
-    
-    int frames_left = frames;
-    const short* ptr = data;
-    
-    while (frames_left > 0) {
-        int written = snd_pcm_writei(playback_handle, ptr, frames_left);
-        
-        if (written < 0) {
-            if (snd_pcm_recover(playback_handle, written, 0) < 0) {
-                snd_pcm_close(playback_handle);
-                playback_handle = nullptr;
-                return;
-            }
-            break;
-        }
-        
-        if (written > 0) {
-            ptr += written * CHANNELS;
-            frames_left -= written;
-        } else {
-            std::this_thread::sleep_for(std::chrono::milliseconds(1));
-            break;
-        }
-    }
 }
 
 void MicrophoneReader::processAudio() {
-    std::vector<short> buffer(FRAMES * CHANNELS, 0);
-    std::cout << "Press Ctrl+C to stop.\n" << std::endl;
+    std::vector<int16_t> buffer(frame_size_);
+    int frame_count = 0;
+    int underrun_count = 0;
+    int playback_success_count = 0;
+    int playback_error_count = 0;
 
-    while (true) {
-        int frames_read = snd_pcm_readi(capture_handle, buffer.data(), FRAMES);
+    std::cout << "Processing audio...\n";
+    std::cout << "Playback handle: " << (playback_handle_ ? "VALID" : "NULL") << "\n";
 
-        if (frames_read < 0) {
-            if (snd_pcm_recover(capture_handle, frames_read, 0) < 0) {
-                std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    while (keep_running) {
+        int frames_read = snd_pcm_readi(capture_handle_, buffer.data(), frame_size_);
+        
+        if (frames_read == -EPIPE) {
+            underrun_count++;
+            if (underrun_count % 10 == 1) {
+                std::cerr << "Buffer underrun #" << underrun_count << "\n";
             }
+            snd_pcm_prepare(capture_handle_);
+            continue;
+        } else if (frames_read < 0) {
+            snd_pcm_recover(capture_handle_, frames_read, 1);
             continue;
         }
-        if (frames_read == 0) continue;
 
-        // Calculate and display volume
-        double rms = calculateRMS(buffer, frames_read * CHANNELS);
-        int volume = std::clamp(static_cast<int>((rms / 32767.0) * 100), 0, 100);
-        displayVolumeBar(volume);
+        if (frames_read != frame_size_) {
+            continue;
+        }
 
-        // Write to playback if monitoring enabled
-        if (monitorEnabled.load())
-            writeToPlayback(buffer.data(), frames_read);
+        // Apply callback if set
+        std::vector<int16_t> output_buffer = buffer;
+        if (audio_callback_) {
+            try {
+                output_buffer = audio_callback_(buffer);
+            } catch (const std::exception& e) {
+                std::cerr << "\nCallback error: " << e.what() << "\n";
+                output_buffer = buffer;
+            }
+        }
+
+        // DEBUG: Check signal level
+        if (frame_count % 100 == 0) {
+            float max_val = 0;
+            for (auto s : output_buffer) {
+                max_val = std::max(max_val, static_cast<float>(std::abs(s)));
+            }
+            std::cout << "\nOutput buffer size: " << output_buffer.size() 
+                      << ", peak: " << max_val << "/" << 32768.0f << "\n";
+        }
+
+        // Monitor output - play back if we have a playback handle
+        if (playback_handle_) {
+            // Check playback state
+            snd_pcm_state_t state = snd_pcm_state(playback_handle_);
+            if (state != SND_PCM_STATE_RUNNING && state != SND_PCM_STATE_PREPARED) {
+                std::cout << "Playback state: " << snd_pcm_state_name(state) << ", preparing...\n";
+                snd_pcm_prepare(playback_handle_);
+            }
+
+            int frames_written = snd_pcm_writei(playback_handle_, output_buffer.data(), output_buffer.size());
+            
+            if (frames_written == -EPIPE) {
+                std::cerr << "Playback underrun, recovering...\n";
+                snd_pcm_prepare(playback_handle_);
+                frames_written = snd_pcm_writei(playback_handle_, output_buffer.data(), output_buffer.size());
+            } else if (frames_written < 0) {
+                playback_error_count++;
+                if (playback_error_count % 10 == 1) {
+                    std::cerr << "Playback error #" << playback_error_count 
+                              << ": " << snd_strerror(frames_written) << "\n";
+                }
+                snd_pcm_recover(playback_handle_, frames_written, 1);
+            } else if (frames_written != static_cast<int>(output_buffer.size())) {
+                std::cerr << "Partial write: " << frames_written << "/" << output_buffer.size() << "\n";
+            } else {
+                playback_success_count++;
+            }
+        } else {
+            if (frame_count % 100 == 0) {
+                std::cout << "WARNING: No playback handle!\n";
+            }
+        }
+
+        if (frame_count % 100 == 0) {
+            std::cout << "Frame " << frame_count 
+                      << " (playback OK: " << playback_success_count 
+                      << ", errors: " << playback_error_count 
+                      << ", underruns: " << underrun_count << ")\r" << std::flush;
+        }
+
+        frame_count++;
     }
+
+    std::cout << "\nProcessed " << frame_count << " frames\n";
+    std::cout << "Playback: " << playback_success_count << " successful, " 
+              << playback_error_count << " errors\n";
 }
 
 void MicrophoneReader::cleanup() {
-    if (capture_handle) {
-        snd_pcm_close(capture_handle);
-        std::cout << "\nMicrophone closed." << std::endl;
-        capture_handle = nullptr;
+    if (capture_handle_) {
+        snd_pcm_close(capture_handle_);
+        capture_handle_ = nullptr;
     }
-    if (playback_handle) {
-        snd_pcm_close(playback_handle);
-        std::cout << "Playback closed." << std::endl;
-        playback_handle = nullptr;
+    if (playback_handle_) {
+        snd_pcm_close(playback_handle_);
+        playback_handle_ = nullptr;
     }
 }
