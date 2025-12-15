@@ -36,7 +36,8 @@ DeepFilterNet::DeepFilterNet(const std::string& model_path)
 
 DeepFilterNet::~DeepFilterNet() {  }
 
-void DeepFilterNet::reset() {
+void DeepFilterNet::reset() 
+{
     std::fill(state_.begin(), state_.end(), 0.0f);
 }
 
@@ -47,8 +48,10 @@ void DeepFilterNet::SetNoiseSuppressionStrength(float db)
     cout << "Attenuation set to: " << atten_lim_db_ << " dB\n";
 }
 
-vector<float> DeepFilterNet::ApplyNoiseSuppression(const vector<float>& audio) {
-    if (audio.empty()) {
+vector<float> DeepFilterNet::ApplyNoiseSuppression(const vector<float>& audio) 
+{
+    if (audio.empty()) 
+    {
         throw std::runtime_error("Input audio is empty");
     }
 
@@ -62,7 +65,8 @@ vector<float> DeepFilterNet::ApplyNoiseSuppression(const vector<float>& audio) {
     vector<float> enhanced;
     enhanced.reserve(padded.size());
     
-    for (size_t i = 0; i + HOP_SIZE <= padded.size(); i += HOP_SIZE) {
+    for (size_t i = 0; i + HOP_SIZE <= padded.size(); i += HOP_SIZE) 
+    {
         vector<float> frame(padded.begin() + i, padded.begin() + i + HOP_SIZE);
         auto enhanced_frame = GetEnhancedFrame(frame);
         enhanced.insert(enhanced.end(), enhanced_frame.begin(), enhanced_frame.end());
@@ -72,8 +76,10 @@ vector<float> DeepFilterNet::ApplyNoiseSuppression(const vector<float>& audio) {
     return GetTrimmedOutput(enhanced, orig_len);
 }
 
-vector<float> DeepFilterNet::ProcessRealtimeFrame(const vector<float>& frame) {
-    if (frame.size() != HOP_SIZE) {
+vector<float> DeepFilterNet::ProcessRealtimeFrame(const vector<float>& frame) 
+{
+    if (frame.size() != HOP_SIZE) 
+    {
         throw std::runtime_error("Frame size must be exactly " + std::to_string(HOP_SIZE) + " samples");
     }
     
@@ -81,7 +87,8 @@ vector<float> DeepFilterNet::ProcessRealtimeFrame(const vector<float>& frame) {
     return GetEnhancedFrame(frame);
 }
 
-vector<float> DeepFilterNet::GetPaddedAudio(const vector<float>& audio) {
+vector<float> DeepFilterNet::GetPaddedAudio(const vector<float>& audio) 
+{
     int hop_padding = (HOP_SIZE - (audio.size() % HOP_SIZE)) % HOP_SIZE;
     int total_padding = FFT_SIZE + hop_padding;
     
@@ -90,7 +97,8 @@ vector<float> DeepFilterNet::GetPaddedAudio(const vector<float>& audio) {
     return padded;
 }
 
-vector<float> DeepFilterNet::GetEnhancedFrame(const vector<float>& frame) {
+vector<float> DeepFilterNet::GetEnhancedFrame(const vector<float>& frame) 
+{
     // Create input tensors
     int64_t frame_shape[] = {HOP_SIZE};
     int64_t state_shape[] = {STATE_SIZE};
@@ -135,12 +143,14 @@ vector<float> DeepFilterNet::GetEnhancedFrame(const vector<float>& frame) {
     return vector<float>(enhanced_data, enhanced_data + enhanced_count);
 }
 
-vector<float> DeepFilterNet::GetTrimmedOutput(const vector<float>& enhanced, int orig_len) {
+vector<float> DeepFilterNet::GetTrimmedOutput(const vector<float>& enhanced, int orig_len) 
+{
     int d = FFT_SIZE - HOP_SIZE;
     int start = d;
     int end = std::min(orig_len + d, (int)enhanced.size());
     
-    if (start < 0 || start >= end || end > (int)enhanced.size()) {
+    if (start < 0 || start >= end || end > (int)enhanced.size()) 
+    {
         cerr << "Warning: Invalid trim range\n";
         return enhanced;
     }
@@ -155,7 +165,8 @@ void DeepFilterNet::PrintModelSummary() const
     
     size_t num_inputs = session_.GetInputCount();
     cout << "Inputs: " << num_inputs << '\n';
-    for (size_t i = 0; i < num_inputs; ++i) {
+    for (size_t i = 0; i < num_inputs; ++i) 
+    {
         auto name = session_.GetInputNameAllocated(i, Ort::AllocatorWithDefaultOptions());
         auto type_info = session_.GetInputTypeInfo(i);
         auto tensor_info = type_info.GetTensorTypeAndShapeInfo();
@@ -171,7 +182,8 @@ void DeepFilterNet::PrintModelSummary() const
     
     size_t num_outputs = session_.GetOutputCount();
     cout << "Outputs: " << num_outputs << '\n';
-    for (size_t i = 0; i < num_outputs; ++i) {
+    for (size_t i = 0; i < num_outputs; ++i) 
+    {
         auto name = session_.GetOutputNameAllocated(i, Ort::AllocatorWithDefaultOptions());
         auto type_info = session_.GetOutputTypeInfo(i);
         auto tensor_info = type_info.GetTensorTypeAndShapeInfo();

@@ -21,8 +21,22 @@ option(FETCH_ONNXRUNTIME "Download and build ONNX Runtime from source" ON)
 # DEPENDENCIES
 # ============================================================================
 
-# ALSA (Audio) - Required
-find_package(ALSA REQUIRED)
+# ALSA (Audio) - Required 
+# find_package(ALSA REQUIRED) 
+
+# SoundIO (Cross platform Audio handler)
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(SOUNDIO libsoundio)
+
+if(NOT SOUNDIO_FOUND)
+    # Fallback: try manual search
+    find_path(SOUNDIO_INCLUDE_DIR soundio.h PATHS /usr/local/include/soundio)
+    find_library(SOUNDIO_LIBRARIES libsoundio PATHS /usr/local/lib)
+    
+    if(NOT SOUNDIO_INCLUDE_DIR OR NOT SOUNDIO_LIBRARIES)
+        message(FATAL_ERROR "libsoundio not found. Build from source: https://github.com/andrewrk/libsoundio")
+    endif()
+endif()
 
 # ONNX Runtime
 if(FETCH_ONNXRUNTIME)
@@ -78,11 +92,12 @@ add_library(NeuralMicLib
 
 target_include_directories(NeuralMicLib PUBLIC
     ${PROJECT_SOURCE_DIR}/include
-    ${ALSA_INCLUDE_DIRS}
+    ${SOUNDIO_INCLUDE_DIRS}
+   
 )
 
 target_link_libraries(NeuralMicLib PUBLIC
-    ${ALSA_LIBRARIES}
+    ${SOUNDIO_LIBRARIES}  
 )
 
 # ===========================================================================
@@ -101,7 +116,6 @@ if(HAVE_ONNXRUNTIME)
 endif()
 
 # Install LAME: sudo apt-get install libmp3lame-dev (on Debian/Ubuntu)
-# Link LAME library
 find_library(LAME_LIB mp3lame)
 if(LAME_LIB)
     target_compile_definitions(NeuralMicLib PRIVATE USE_MP3)
@@ -125,7 +139,7 @@ add_executable(NeuralMic
     src/main.cpp
 )
 
-target_include_directories(NeuralMic PRIVATE
+target_include_directories(NeuralMic PRIVATE  
     ${PROJECT_SOURCE_DIR}/include
 )
 
@@ -147,7 +161,7 @@ message(STATUS "  Compiler:       ${CMAKE_CXX_COMPILER_ID}")
 message(STATUS "  Build Type:     ${CMAKE_BUILD_TYPE}")
 message(STATUS "")
 message(STATUS "  Dependencies:")
-message(STATUS "    ALSA:         ${ALSA_FOUND}")
+message(STATUS "    SoundIO:      ${SOUNDIO_FOUND}")
 message(STATUS "    ONNX Runtime: ${HAVE_ONNXRUNTIME}")
 message(STATUS "    MP3 (LameLib):${HAVE_MP3}")
 message(STATUS "═══════════════════════════════════════════")
