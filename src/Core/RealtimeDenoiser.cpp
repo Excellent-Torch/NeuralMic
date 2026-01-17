@@ -208,7 +208,12 @@ void RealtimeDenoiser::stop() {
     
     if (mic_reader_) {
         mic_reader_->cleanup();
+        mic_reader_.reset();  // Destroy and allow fresh recreation
     }
+    
+    // Clear cached device lists
+    available_mics_.clear();
+    available_speakers_.clear();
     
     initialized_ = false;
 }

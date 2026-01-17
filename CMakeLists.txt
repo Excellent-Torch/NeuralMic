@@ -16,10 +16,40 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 # ============================================================================
 
 option(FETCH_ONNXRUNTIME "Download and build ONNX Runtime from source" ON)
+option(BUILD_GUI "Build Qt GUI application" ON)
 
 # ============================================================================
 # DEPENDENCIES
 # ============================================================================
+
+# Qt (prefer Qt6, fallback to Qt5)
+if(BUILD_GUI)
+    find_package(Qt6 COMPONENTS Widgets QUIET)
+    if(Qt6_FOUND)
+        set(QT_VERSION 6)
+        set(QT_WIDGETS Qt6::Widgets)
+        message(STATUS "Found Qt6")
+    else()
+        find_package(Qt5 COMPONENTS Widgets QUIET)
+        if(Qt5_FOUND)
+            set(QT_VERSION 5)
+            set(QT_WIDGETS Qt5::Widgets)
+            message(STATUS "Found Qt5")
+        else()
+            message(WARNING "Qt not found. GUI will not be built.")
+            message(STATUS "  Install with: sudo apt install qt6-base-dev")
+            message(STATUS "  Or:           sudo apt install qtbase5-dev")
+            set(BUILD_GUI OFF)
+        endif()
+    endif()
+    
+    # Enable Qt auto-processing only if Qt found
+    if(BUILD_GUI)
+        set(CMAKE_AUTOMOC ON)
+        set(CMAKE_AUTORCC ON)
+        set(CMAKE_AUTOUIC ON)
+    endif()
+endif()
 
 # ALSA (Audio) - Required 
 # find_package(ALSA REQUIRED) 
@@ -144,7 +174,7 @@ if(HAVE_MP3)
 endif()
 
 # ============================================================================
-# EXECUTABLE: NeuralMic
+# EXECUTABLE: NeuralMic (CLI)
 # ============================================================================
 
 add_executable(NeuralMic
@@ -158,6 +188,27 @@ target_include_directories(NeuralMic PRIVATE
 target_link_libraries(NeuralMic PRIVATE
     NeuralMicLib
 )
+
+# ============================================================================
+# EXECUTABLE: NeuralMicGUI (Qt)
+# ============================================================================
+
+if(BUILD_GUI)
+    add_executable(NeuralMicGUI
+        src/gui/main.cpp
+        src/gui/MainWindow.cpp
+        src/gui/MainWindow.h
+    )
+
+    target_include_directories(NeuralMicGUI PRIVATE
+        ${PROJECT_SOURCE_DIR}/include
+    )
+
+    target_link_libraries(NeuralMicGUI PRIVATE
+        NeuralMicLib
+        ${QT_WIDGETS}
+    )
+endif()
 
 # ============================================================================
 # BUILD INFO
@@ -176,5 +227,6 @@ message(STATUS "  Dependencies:")
 message(STATUS "    SoundIO:      ${SOUNDIO_FOUND}")
 message(STATUS "    ONNX Runtime: ${HAVE_ONNXRUNTIME}")
 message(STATUS "    MP3 (LameLib):${HAVE_MP3}")
+message(STATUS "    Qt GUI:       ${BUILD_GUI}")
 message(STATUS "═══════════════════════════════════════════")
 message(STATUS "")

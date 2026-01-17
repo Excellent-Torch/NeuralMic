@@ -356,8 +356,8 @@ bool MicrophoneReader::initialize() {
     
     std::cout << "✓ Input stream opened (latency: " << instream_->software_latency * 1000 << " ms)\n";
     
-    // Setup output device
-    if (monitor_enabled_ || selected_playback_index_ >= 0) {
+    // Setup output device only if monitoring is enabled
+    if (monitor_enabled_) {
         int output_index = selected_playback_index_ >= 0 ? 
                            selected_playback_index_ : 
                            soundio_default_output_device_index(soundio_);
