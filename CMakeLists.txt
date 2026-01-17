@@ -30,10 +30,22 @@ pkg_check_modules(SOUNDIO libsoundio)
 
 if(NOT SOUNDIO_FOUND)
     # Fallback: try manual search
-    find_path(SOUNDIO_INCLUDE_DIR soundio.h PATHS /usr/local/include/soundio)
-    find_library(SOUNDIO_LIBRARIES libsoundio PATHS /usr/local/lib)
+    find_path(SOUNDIO_INCLUDE_DIRS soundio/soundio.h
+        PATHS 
+            /usr/include
+            /usr/local/include
+    )
+    find_library(SOUNDIO_LIBRARIES soundio
+        PATHS 
+            /usr/lib
+            /usr/lib/x86_64-linux-gnu
+            /usr/local/lib
+    )
     
-    if(NOT SOUNDIO_INCLUDE_DIR OR NOT SOUNDIO_LIBRARIES)
+    if(SOUNDIO_INCLUDE_DIRS AND SOUNDIO_LIBRARIES)
+        set(SOUNDIO_FOUND TRUE)
+        message(STATUS "Found libsoundio (manual): ${SOUNDIO_LIBRARIES}")
+    else()
         message(FATAL_ERROR "libsoundio not found. Build from source: https://github.com/andrewrk/libsoundio")
     endif()
 endif()
