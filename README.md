@@ -4,7 +4,9 @@ Real-time AI-based noise suppression for Linux using DeepFilterNet.
 
 ## Overview
 
-NeuralMic is a C++ application that leverages the [DeepFilterNet](https://github.com/Rikorose/DeepFilterNet) neural network model to perform real-time audio noise suppression. It provides both a Qt-based GUI and a command-line interface for processing live microphone input or denoising audio files, making it ideal for improving voice clarity in noisy environments.
+NeuralMic is a C++ application that leverages the [DeepFilterNet](https://github.com/Rikorose/DeepFilterNet) neural network model to perform real-time audio noise suppression. It can process live microphone input or denoise audio files, making it ideal for improving voice clarity in noisy environments. 
+
+⚠️ **Currently the GUI version is still under development.** 
 
 ## Features
 
