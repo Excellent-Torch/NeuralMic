@@ -1,6 +1,16 @@
-# NeuralMic
+<p align="center">
+  <img src="assets/images/logo.png" alt="NeuralMic Logo" width="128">
+</p>
 
-Real-time AI-based noise suppression for Linux using DeepFilterNet.
+<h1 align="center">NeuralMic</h1>
+
+<p align="center">
+  <strong>Real-time AI-based noise suppression for Linux using DeepFilterNet</strong>
+</p>
+
+<p align="center">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-GPLv3-blue.svg" alt="License: GPL v3"></a>
+</p>
 
 ## Overview
 

@@ -53,13 +53,22 @@ MainWindow::~MainWindow() {
 
 void MainWindow::setupUi() {
     setWindowTitle("NeuralMic");
-    setMinimumSize(420, 320);
-    setMaximumSize(600, 400);
+    setMinimumSize(420, 400);
+    setMaximumSize(600, 480);
 
     auto* central = new QWidget(this);
     auto* layout = new QVBoxLayout(central);
     layout->setSpacing(8);
     layout->setContentsMargins(12, 12, 12, 12);
+
+    // === Logo ===
+    auto* logoLabel = new QLabel(this);
+    QPixmap logo(QApplication::applicationDirPath() + "/../assets/images/logo.png");
+    if (!logo.isNull()) {
+        logoLabel->setPixmap(logo.scaledToWidth(200, Qt::SmoothTransformation));
+        logoLabel->setAlignment(Qt::AlignCenter);
+        layout->addWidget(logoLabel);
+    }
 
     // === Device Selection ===
     auto* deviceGroup = new QGroupBox("Audio Devices", this);
