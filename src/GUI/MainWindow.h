@@ -2,7 +2,6 @@
 
 #include <QMainWindow>
 #include <QComboBox>
-#include <QSlider>
 #include <QPushButton>
 #include <QLabel>
 #include <QThread>
@@ -10,6 +9,7 @@
 #include <atomic>
 
 class SwitchToggle;
+class PercentSlider;
 
 class RealtimeDenoiser;
 
@@ -67,7 +67,7 @@ private:
     struct {
         QComboBox* micCombo;
         QComboBox* speakerCombo;
-        QSlider* strengthSlider;
+        PercentSlider* strengthSlider;
         QLabel* strengthValue;
         SwitchToggle* monitorToggle;
         SwitchToggle* virtualMicToggle;

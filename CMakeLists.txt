@@ -209,6 +209,8 @@ if(BUILD_GUI)
         src/GUI/MainWindow.h
         src/GUI/SwitchToggle.cpp
         src/GUI/SwitchToggle.h
+        src/GUI/PercentSlider.cpp
+        src/GUI/PercentSlider.h
     )
 
     target_include_directories(NeuralMicGUI PRIVATE

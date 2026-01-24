@@ -1,6 +1,7 @@
 #include "MainWindow.h"
 #include "Core/RealtimeDenoiser.h"
 #include "SwitchToggle.h"
+#include "PercentSlider.h"
 
 #include <QVBoxLayout>
 #include <QHBoxLayout>
@@ -89,11 +90,8 @@ void MainWindow::setupUi() {
 
     noiseLayout->addWidget(new QLabel("Strength:", this));
     
-    ui_.strengthSlider = new QSlider(Qt::Horizontal, this);
-    ui_.strengthSlider->setRange(0, 100);
+    ui_.strengthSlider = new PercentSlider(this);
     ui_.strengthSlider->setValue(0);
-    ui_.strengthSlider->setTickPosition(QSlider::TicksBelow);
-    ui_.strengthSlider->setTickInterval(25);
     noiseLayout->addWidget(ui_.strengthSlider, 1);
     
     ui_.strengthValue = new QLabel("0%", this);
@@ -105,13 +103,14 @@ void MainWindow::setupUi() {
 
     // === Options ===
     auto* optionsGroup = new QGroupBox("Options", this);
-    auto* optionsLayout = new QVBoxLayout(optionsGroup);
-    optionsLayout->setSpacing(8);
+    auto* optionsLayout = new QHBoxLayout(optionsGroup);
+    optionsLayout->addStretch();
+    optionsLayout->setSpacing(20);
 
     // Monitor toggle row
     auto* monitorRow = new QHBoxLayout();
-    monitorRow->addWidget(new QLabel("Monitor Output:", this));
-    monitorRow->addStretch();
+    monitorRow->addWidget(new QLabel("Monitor Output :", this));
+    //monitorRow->addStretch();
     ui_.monitorToggle = new SwitchToggle(this);
     ui_.monitorToggle->setToolTip("Hear processed audio through speakers");
     monitorRow->addWidget(ui_.monitorToggle);
@@ -119,8 +118,8 @@ void MainWindow::setupUi() {
 
     // Virtual mic toggle row
     auto* virtualMicRow = new QHBoxLayout();
-    virtualMicRow->addWidget(new QLabel("Virtual Mic:", this));
-    virtualMicRow->addStretch();
+    virtualMicRow->addWidget(new QLabel("Virtual Mic :", this));
+    //virtualMicRow->addStretch();
     ui_.virtualMicToggle = new SwitchToggle(this);
     ui_.virtualMicToggle->setChecked(true);
     ui_.virtualMicToggle->setToolTip("Use in Discord, games, etc.");
@@ -163,7 +162,7 @@ void MainWindow::setupUi() {
 void MainWindow::setupConnections() {
     connect(ui_.startBtn, &QPushButton::clicked, this, &MainWindow::onStartStop);
     connect(ui_.refreshBtn, &QPushButton::clicked, this, &MainWindow::onRefreshDevices);
-    connect(ui_.strengthSlider, &QSlider::valueChanged, this, &MainWindow::onStrengthChanged);
+    connect(ui_.strengthSlider, &PercentSlider::valueChanged, this, &MainWindow::onStrengthChanged);
     connect(ui_.monitorToggle, &SwitchToggle::toggled, this, &MainWindow::onMonitorToggled);
     connect(ui_.virtualMicToggle, &SwitchToggle::toggled, this, &MainWindow::onVirtualMicToggled);
 }
