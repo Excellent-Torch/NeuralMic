@@ -80,6 +80,13 @@ if(NOT SOUNDIO_FOUND)
     endif()
 endif()
 
+# PulseAudio (for virtual microphone)
+pkg_check_modules(PULSE libpulse-simple)
+if(NOT PULSE_FOUND)
+    message(WARNING "libpulse-simple not found. Virtual mic feature disabled.")
+    message(STATUS "  Install with: sudo apt install libpulse-dev")
+endif()
+
 # ONNX Runtime
 if(FETCH_ONNXRUNTIME)
     message(STATUS "Downloading ONNX Runtime...")
@@ -128,6 +135,7 @@ endif()
 
 add_library(NeuralMicLib
     src/Utils/MicReader.cpp
+    src/Utils/VirtualMic.cpp
     src/Core/OnnxInference.cpp
     src/Core/RealtimeDenoiser.cpp
 )
@@ -135,11 +143,12 @@ add_library(NeuralMicLib
 target_include_directories(NeuralMicLib PUBLIC
     ${PROJECT_SOURCE_DIR}/include
     ${SOUNDIO_INCLUDE_DIRS}
-   
+    ${PULSE_INCLUDE_DIRS}
 )
 
 target_link_libraries(NeuralMicLib PUBLIC
-    ${SOUNDIO_LIBRARIES}  
+    ${SOUNDIO_LIBRARIES}
+    ${PULSE_LIBRARIES}
 )
 
 # ===========================================================================
@@ -195,13 +204,16 @@ target_link_libraries(NeuralMic PRIVATE
 
 if(BUILD_GUI)
     add_executable(NeuralMicGUI
-        src/gui/main.cpp
-        src/gui/MainWindow.cpp
-        src/gui/MainWindow.h
+        src/GUI/main.cpp
+        src/GUI/MainWindow.cpp
+        src/GUI/MainWindow.h
+        src/GUI/SwitchToggle.cpp
+        src/GUI/SwitchToggle.h
     )
 
     target_include_directories(NeuralMicGUI PRIVATE
         ${PROJECT_SOURCE_DIR}/include
+        ${PROJECT_SOURCE_DIR}/src/GUI
     )
 
     target_link_libraries(NeuralMicGUI PRIVATE

@@ -16,7 +16,8 @@ RealtimeDenoiser::RealtimeDenoiser()
       mic_reader_(nullptr),
       initialized_(false),
       running_(false),
-      monitoring_enabled_(false) {
+      monitoring_enabled_(false),
+      virtual_mic_enabled_(false) {
 }
 
 RealtimeDenoiser::~RealtimeDenoiser() {
@@ -98,6 +99,14 @@ void RealtimeDenoiser::enableMonitoring(bool enable) {
     cout << "Monitoring: " << (enable ? "ENABLED" : "DISABLED") << "\n";
 }
 
+void RealtimeDenoiser::enableVirtualMic(bool enable) {
+    virtual_mic_enabled_ = enable;
+    if (mic_reader_) {
+        mic_reader_->setVirtualMicEnabled(enable);
+    }
+    cout << "Virtual Mic: " << (enable ? "ENABLED" : "DISABLED") << "\n";
+}
+
 vector<float> RealtimeDenoiser::convertToFloat(const vector<int16_t>& samples) {
     vector<float> result(samples.size());
     for (size_t i = 0; i < samples.size(); ++i) {
@@ -169,6 +178,7 @@ bool RealtimeDenoiser::initialize() {
     });
     
     mic_reader_->setMonitorEnabled(monitoring_enabled_);
+    mic_reader_->setVirtualMicEnabled(virtual_mic_enabled_);
     
     if (!mic_reader_->initialize()) {
         std::cerr << "Failed to initialize microphone reader\n";

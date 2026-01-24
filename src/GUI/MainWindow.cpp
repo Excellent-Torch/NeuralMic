@@ -1,5 +1,6 @@
 #include "MainWindow.h"
 #include "Core/RealtimeDenoiser.h"
+#include "SwitchToggle.h"
 
 #include <QVBoxLayout>
 #include <QHBoxLayout>
@@ -56,8 +57,8 @@ void MainWindow::setupUi() {
 
     auto* central = new QWidget(this);
     auto* layout = new QVBoxLayout(central);
-    layout->setSpacing(12);
-    layout->setContentsMargins(16, 16, 16, 16);
+    layout->setSpacing(8);
+    layout->setContentsMargins(12, 12, 12, 12);
 
     // === Device Selection ===
     auto* deviceGroup = new QGroupBox("Audio Devices", this);
@@ -80,10 +81,6 @@ void MainWindow::setupUi() {
     speakerRow->addWidget(ui_.speakerCombo, 1);
     deviceLayout->addLayout(speakerRow);
 
-    // Monitor checkbox
-    ui_.monitorCheck = new QCheckBox("Monitor output (hear processed audio)", this);
-    deviceLayout->addWidget(ui_.monitorCheck);
-
     layout->addWidget(deviceGroup);
 
     // === Noise Suppression ===
@@ -105,6 +102,32 @@ void MainWindow::setupUi() {
     noiseLayout->addWidget(ui_.strengthValue);
 
     layout->addWidget(noiseGroup);
+
+    // === Options ===
+    auto* optionsGroup = new QGroupBox("Options", this);
+    auto* optionsLayout = new QVBoxLayout(optionsGroup);
+    optionsLayout->setSpacing(8);
+
+    // Monitor toggle row
+    auto* monitorRow = new QHBoxLayout();
+    monitorRow->addWidget(new QLabel("Monitor Output:", this));
+    monitorRow->addStretch();
+    ui_.monitorToggle = new SwitchToggle(this);
+    ui_.monitorToggle->setToolTip("Hear processed audio through speakers");
+    monitorRow->addWidget(ui_.monitorToggle);
+    optionsLayout->addLayout(monitorRow);
+
+    // Virtual mic toggle row
+    auto* virtualMicRow = new QHBoxLayout();
+    virtualMicRow->addWidget(new QLabel("Virtual Mic:", this));
+    virtualMicRow->addStretch();
+    ui_.virtualMicToggle = new SwitchToggle(this);
+    ui_.virtualMicToggle->setChecked(true);
+    ui_.virtualMicToggle->setToolTip("Use in Discord, games, etc.");
+    virtualMicRow->addWidget(ui_.virtualMicToggle);
+    optionsLayout->addLayout(virtualMicRow);
+
+    layout->addWidget(optionsGroup);
 
     // === Controls ===
     auto* controlLayout = new QHBoxLayout();
@@ -141,14 +164,16 @@ void MainWindow::setupConnections() {
     connect(ui_.startBtn, &QPushButton::clicked, this, &MainWindow::onStartStop);
     connect(ui_.refreshBtn, &QPushButton::clicked, this, &MainWindow::onRefreshDevices);
     connect(ui_.strengthSlider, &QSlider::valueChanged, this, &MainWindow::onStrengthChanged);
-    connect(ui_.monitorCheck, &QCheckBox::toggled, this, &MainWindow::onMonitorToggled);
+    connect(ui_.monitorToggle, &SwitchToggle::toggled, this, &MainWindow::onMonitorToggled);
+    connect(ui_.virtualMicToggle, &SwitchToggle::toggled, this, &MainWindow::onVirtualMicToggled);
 }
 
 void MainWindow::loadModel() {
     const QString modelPath = QApplication::applicationDirPath() + 
                               "/../assets/models/DeepFilterNetV3.onnx";
     
-    if (denoiser_->loadModel(modelPath.toStdString())) {
+    if (denoiser_->loadModel(modelPath.toStdString())) 
+    {
         updateStatus("Model loaded");
     } else {
         updateStatus("Failed to load model", true);
@@ -160,20 +185,24 @@ void MainWindow::onRefreshDevices() {
     ui_.micCombo->clear();
     ui_.speakerCombo->clear();
 
-    for (const auto& mic : denoiser_->listMicrophones()) {
+    for (const auto& mic : denoiser_->listMicrophones()) 
+    {
         ui_.micCombo->addItem(QString::fromStdString(mic));
     }
-    for (const auto& speaker : denoiser_->listSpeakers()) {
+    for (const auto& speaker : denoiser_->listSpeakers()) 
+    {
         ui_.speakerCombo->addItem(QString::fromStdString(speaker));
     }
 }
 
 void MainWindow::onStartStop() {
-    if (!running_) {
+    if (!running_) 
+    {
         // Configure denoiser
         denoiser_->selectMicrophone(ui_.micCombo->currentIndex());
         denoiser_->selectSpeaker(ui_.speakerCombo->currentIndex());
-        denoiser_->enableMonitoring(ui_.monitorCheck->isChecked());
+        denoiser_->enableMonitoring(ui_.monitorToggle->isChecked());
+        denoiser_->enableVirtualMic(ui_.virtualMicToggle->isChecked());
         denoiser_->setNoiseSuppressionStrength(ui_.strengthSlider->value());
 
         // Setup worker thread
@@ -209,7 +238,8 @@ void MainWindow::onAudioStarted() {
 void MainWindow::onAudioStopped() {
     running_ = false;
     
-    if (audioThread_) {
+    if (audioThread_) 
+    {
         audioThread_->quit();
         audioThread_->wait();
         audioThread_->deleteLater();
@@ -227,7 +257,8 @@ void MainWindow::onAudioStopped() {
 void MainWindow::onAudioError(const QString& msg) {
     running_ = false;
     
-    if (audioThread_) {
+    if (audioThread_) 
+    {
         audioThread_->quit();
         audioThread_->wait();
         audioThread_->deleteLater();
@@ -255,11 +286,14 @@ void MainWindow::setRunningState(bool running) {
     ui_.micCombo->setEnabled(!running);
     ui_.speakerCombo->setEnabled(!running);
     ui_.refreshBtn->setEnabled(!running);
+    ui_.virtualMicToggle->setEnabled(!running);
+    ui_.monitorToggle->setEnabled(!running);
 }
 
 void MainWindow::onStrengthChanged(int value) {
     ui_.strengthValue->setText(QString("%1%").arg(value));
-    if (denoiser_) {
+    if (denoiser_) 
+    {
         // Convert 0-100% to 0 to -30 dB range
         float db = -static_cast<float>(value) * 0.3f;
         denoiser_->setNoiseSuppressionStrength(db);
@@ -267,13 +301,28 @@ void MainWindow::onStrengthChanged(int value) {
 }
 
 void MainWindow::onMonitorToggled(bool checked) {
-    if (denoiser_) {
+    if (denoiser_) 
+    {
         denoiser_->enableMonitoring(checked);
+    }
+}
+
+void MainWindow::onVirtualMicToggled(bool checked) {
+    if (denoiser_) 
+    {
+        denoiser_->enableVirtualMic(checked);
     }
 }
 
 void MainWindow::updateStatus(const QString& status, bool isError) {
     ui_.status->setText(status);
+
+    if (running_) 
+    {
+        ui_.status->setStyleSheet("QLabel { color: #27ae60; padding: 4px; font-weight: bold; }");
+        return;
+    }
+
     ui_.status->setStyleSheet(isError 
         ? "QLabel { color: #c0392b; padding: 4px; font-weight: bold; }"
         : "QLabel { color: #666; padding: 4px; }"

@@ -12,6 +12,7 @@ NeuralMic is a C++ application that leverages the [DeepFilterNet](https://github
 
 - **Qt GUI Application** – Modern, responsive interface with real-time controls
 - **Real-time Noise Suppression** – Process microphone audio on-the-fly with minimal latency
+- **Virtual Microphone** – Output to a virtual device for use with Discord, Zoom, etc.
 - **File Processing Mode** – Denoise WAV audio files (Under Development for the GUI)
 - **Adjustable Suppression Strength** – Fine-tune noise reduction from 0% to 100%
 - **Device Selection** – Choose input microphone and output speaker devices
@@ -19,6 +20,15 @@ NeuralMic is a C++ application that leverages the [DeepFilterNet](https://github
 - **Threaded Audio Processing** – Non-blocking UI with separate audio thread
 - **Cross-platform Audio** – Built on libsoundio for robust audio handling
 - **ONNX Runtime** – Efficient neural network inference
+
+## Using with Discord, Zoom, and Other Apps
+
+NeuralMic creates a virtual microphone called **"Monitor of NeuralMic"** that you can select as your input device in any application:
+
+1. Start NeuralMic with "Virtual Mic" enabled (enabled by default)
+2. Click "Start" to begin processing
+3. In Discord/Zoom/etc., go to audio settings and select **"Monitor of NeuralMic"** as your input device
+4. Your voice will now have real-time noise suppression!
 
 ## Screenshots
 
@@ -50,6 +60,9 @@ sudo apt-get install build-essential cmake g++-13
 
 # Audio library
 sudo apt-get install libsoundio-dev
+
+# PulseAudio for virtual microphone
+sudo apt-get install libpulse-dev
 
 # Qt6 for GUI (or use qt5-default for Qt5)
 sudo apt-get install qt6-base-dev

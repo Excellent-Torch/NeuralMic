@@ -1,4 +1,5 @@
 #include "Utils/MicReader.h"
+#include "Utils/VirtualMic.h"
 #include <iostream>
 #include <cstring>
 #include <algorithm>
@@ -22,6 +23,7 @@ MicrophoneReader::MicrophoneReader()
       selected_device_index_(-1),
       selected_playback_index_(-1),
       monitor_enabled_(false),
+      virtual_mic_enabled_(false),
       audio_callback_(nullptr),
       write_pos_(0),
       read_pos_(0),
@@ -166,6 +168,10 @@ void MicrophoneReader::setMonitorEnabled(bool enabled) {
     monitor_enabled_ = enabled;
 }
 
+void MicrophoneReader::setVirtualMicEnabled(bool enabled) {
+    virtual_mic_enabled_ = enabled;
+}
+
 void MicrophoneReader::setAudioCallback(AudioCallback callback) {
     audio_callback_ = callback;
 }
@@ -223,7 +229,12 @@ void MicrophoneReader::readCallback(SoundIoInStream* instream, int frame_count_m
             processed = chunk;
         }
         
-        // Write to ring buffer
+        // Write to virtual mic for other apps
+        if (self->virtual_mic_ && self->virtual_mic_->isActive()) {
+            self->virtual_mic_->write(processed);
+        }
+        
+        // Write to ring buffer for monitoring
         if (self->monitor_enabled_ || self->outstream_) {
             size_t buffer_size = self->ring_buffer_.size();
             size_t write_pos = self->write_pos_.load();
@@ -393,11 +404,21 @@ bool MicrophoneReader::initialize() {
         std::cout << "✓ Output stream opened (latency: " << outstream_->software_latency * 1000 << " ms)\n";
     }
     
+    // Setup virtual mic for other apps
+    if (virtual_mic_enabled_) {
+        virtual_mic_ = std::make_unique<VirtualMic>();
+        if (!virtual_mic_->initialize()) {
+            std::cerr << "Warning: Virtual mic failed to initialize\n";
+            virtual_mic_.reset();
+        }
+    }
+    
     std::cout << "\n Audio initialized:\n";
     std::cout << "  Sample rate: " << sample_rate_ << " Hz\n";
     std::cout << "  Channels: " << channels_ << "\n";
     std::cout << "  Frame size: " << frame_size_ << " samples\n";
     std::cout << "  Monitoring: " << (monitor_enabled_ ? "ENABLED" : "DISABLED") << "\n";
+    std::cout << "  Virtual Mic: " << (virtual_mic_ ? "ENABLED" : "DISABLED") << "\n";
     
     return true;
 }
@@ -448,6 +469,11 @@ void MicrophoneReader::processAudio() {
 
 void MicrophoneReader::cleanup() {
     running_ = false;
+    
+    if (virtual_mic_) {
+        virtual_mic_->cleanup();
+        virtual_mic_.reset();
+    }
     
     if (instream_) {
         soundio_instream_destroy(instream_);

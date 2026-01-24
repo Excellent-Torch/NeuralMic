@@ -6,7 +6,9 @@
 #include <map>
 #include <mutex>
 #include <atomic>
+#include <memory>
 
+class VirtualMic;
 using AudioCallback = std::function<std::vector<int16_t>(const std::vector<int16_t>&)>;
 
 class MicrophoneReader {
@@ -19,6 +21,7 @@ public:
     bool selectDevice(const std::string& display_name);
     bool selectPlaybackDevice(const std::string& display_name);
     void setMonitorEnabled(bool enabled);
+    void setVirtualMicEnabled(bool enabled);
     void setAudioCallback(AudioCallback callback);
     bool initialize();
     void processAudio();
@@ -40,6 +43,8 @@ private:
     std::map<std::string, int> speaker_name_map_;
     
     bool monitor_enabled_;
+    bool virtual_mic_enabled_;
+    std::unique_ptr<VirtualMic> virtual_mic_;
     AudioCallback audio_callback_;
     
     static const unsigned int sample_rate_ = 48000;

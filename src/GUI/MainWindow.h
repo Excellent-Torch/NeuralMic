@@ -5,10 +5,11 @@
 #include <QSlider>
 #include <QPushButton>
 #include <QLabel>
-#include <QCheckBox>
 #include <QThread>
 #include <memory>
 #include <atomic>
+
+class SwitchToggle;
 
 class RealtimeDenoiser;
 
@@ -42,6 +43,7 @@ private slots:
     void onStartStop();
     void onStrengthChanged(int value);
     void onMonitorToggled(bool checked);
+    void onVirtualMicToggled(bool checked);
     void onRefreshDevices();
     
     void onAudioStarted();
@@ -67,7 +69,8 @@ private:
         QComboBox* speakerCombo;
         QSlider* strengthSlider;
         QLabel* strengthValue;
-        QCheckBox* monitorCheck;
+        SwitchToggle* monitorToggle;
+        SwitchToggle* virtualMicToggle;
         QPushButton* startBtn;
         QPushButton* refreshBtn;
         QLabel* status;
