@@ -36,10 +36,8 @@ env/
 venv/
 
 # Dependencies
-include/*/
 lib/*/
 third_party/*/
-!include/Utils/
 
 # Executables
 NeuralMic
