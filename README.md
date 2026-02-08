@@ -14,15 +14,13 @@
 
 ## Overview
 
-NeuralMic is a C++ application that uses [DeepFilterNet](https://github.com/Rikorose/DeepFilterNet) to perform real-time audio noise suppression. It creates a virtual microphone so apps like Discord, Zoom, and others can use your cleaned audio directly. The motivation was for an alternative to NVIDIA's Broadcast but for Linux and Open Source. Currently DeepfilternetV3 is implemented and other models will be added in future.
+NeuralMic is a C++ application that uses [DeepFilterNet](https://github.com/Rikorose/DeepFilterNet) to perform real-time audio noise suppression. It creates a virtual microphone so apps like Discord, Zoom, and others can use your cleaned audio directly. The motivation behind this project was for an alternative to NVIDIA's Broadcast but for Linux and Open Source. Currently DeepfilternetV3 is implemented and other models will be added in future.
 
 ## Features
 
 - **Real-time noise suppression** via DeepFilterNet V3
 - **Virtual microphone output** – works with Discord, Zoom, and any app
 - **Qt GUI** with device selection, suppression strength slider, and monitoring toggle
-- **Command-line interface** for scripting and file processing
-- **Adjustable suppression strength** (0–100%)
 
 <p align="center">
   <img src="assets/images/gui-1.png" alt="NeuralMic GUI Screenshot" width="600">
@@ -30,7 +28,10 @@ NeuralMic is a C++ application that uses [DeepFilterNet](https://github.com/Riko
 
 ## Quick Start
 
-### Dependencies (Ubuntu/Debian) (Open to Testing on Other Distributions as well)
+### Dependencies (Ubuntu/Debian) 
+
+### (Need Help with Testing on Other Distributions)
+<span style="color:red; font-weight:bold;">Need Help with Testing on Other Distributions</span>
 
 ```bash
 sudo apt-get install build-essential cmake g++-13 libsoundio-dev libpulse-dev qt6-base-dev
@@ -57,8 +58,8 @@ ONNX Runtime is downloaded automatically during the CMake step.
 ## Using with Discord, Zoom, etc.
 
 1. Launch NeuralMicGUI and click **Start**
-2. In your app's audio settings, select **"Monitor of NeuralMic"** as the input device
-3. Done – your voice now has real-time noise suppression
+2. In your app's audio settings, select **"Monitor of NeuralMic/NeuralMic"** as the input device
+3. Done!
 
 ## CLI Usage
 
