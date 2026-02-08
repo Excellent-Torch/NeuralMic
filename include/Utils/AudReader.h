@@ -372,3 +372,5 @@ inline AudioFile generateSine(double frequency, double duration, uint32_t sample
 }
 
 } // namespace AudioUtils
+
+#endif  // AUDIOFILE_H
