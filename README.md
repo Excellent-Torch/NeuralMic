@@ -26,34 +26,38 @@ NeuralMic is a C++ application that uses [DeepFilterNet](https://github.com/Riko
   <img src="assets/images/gui-1.png" alt="NeuralMic GUI Screenshot" width="600">
 </p>
 
-## Quick Start
+## Install
 
-### Dependencies (Ubuntu/Debian) 
+### Debian/Ubuntu (.deb)
 
-### (Need Help with Testing on Other Distributions)
+Download the latest `.deb` from [Releases](https://github.com/Excellent-Torch/NeuralMic/releases) and install:
+
+```bash
+sudo dpkg -i neuralmic_*.deb
+sudo apt-get install -f   # install any missing dependencies
+```
+
+Then launch from your app menu or run:
+
+```bash
+NeuralMicGUI
+```
+
+### Build from Source
+
 <span style="color:red; font-weight:bold;">Need Help with Testing on Other Distributions</span>
 
 ```bash
 sudo apt-get install build-essential cmake g++-13 libsoundio-dev libpulse-dev qt6-base-dev
-```
-
-### Build
-
-```bash
-git clone https://github.com/yourusername/NeuralMic.git
+git clone https://github.com/Excellent-Torch/NeuralMic.git
 cd NeuralMic
 mkdir build && cd build
 cmake ..
 make -j$(nproc)
-```
-
-ONNX Runtime is downloaded automatically during the CMake step.
-
-### Run
-
-```bash
 ./NeuralMicGUI
 ```
+
+ONNX Runtime is downloaded automatically during CMake.
 
 ## Using with Discord, Zoom, etc.
 
