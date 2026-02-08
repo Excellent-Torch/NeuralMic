@@ -225,6 +225,67 @@ if(BUILD_GUI)
 endif()
 
 # ============================================================================
+# INSTALL RULES
+# ============================================================================
+
+include(GNUInstallDirs)
+
+# Install CLI binary
+install(TARGETS NeuralMic RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+
+# Install GUI binary
+if(BUILD_GUI)
+    install(TARGETS NeuralMicGUI RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+endif()
+
+# Install model
+install(FILES assets/models/DeepFilterNetV3.onnx
+    DESTINATION ${CMAKE_INSTALL_DATADIR}/neuralmic/models
+)
+
+# Install logo
+install(FILES assets/images/logo.png
+    DESTINATION ${CMAKE_INSTALL_DATADIR}/neuralmic/images
+)
+
+# Install ONNX Runtime shared library
+if(FETCH_ONNXRUNTIME)
+    file(GLOB ONNXRUNTIME_LIBS "${CMAKE_BINARY_DIR}/_deps/onnxruntime/lib/libonnxruntime.so*")
+    install(FILES ${ONNXRUNTIME_LIBS}
+        DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    )
+endif()
+
+# Desktop entry
+install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/packaging/neuralmic.desktop
+    DESTINATION ${CMAKE_INSTALL_DATADIR}/applications
+)
+
+# ============================================================================
+# CPACK — .deb PACKAGING
+# ============================================================================
+
+set(CPACK_GENERATOR "DEB")
+set(CPACK_PACKAGE_NAME "neuralmic")
+set(CPACK_PACKAGE_VERSION "${PROJECT_VERSION}")
+set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "${PROJECT_DESCRIPTION}")
+set(CPACK_PACKAGE_DESCRIPTION "Real-time AI-based noise suppression for Linux using DeepFilterNet. Creates a virtual microphone for use with Discord, Zoom, and other apps.")
+set(CPACK_PACKAGE_CONTACT "NeuralMic Maintainers")
+set(CPACK_PACKAGE_HOMEPAGE_URL "https://github.com/yourusername/NeuralMic")
+
+set(CPACK_DEBIAN_PACKAGE_SECTION "sound")
+set(CPACK_DEBIAN_PACKAGE_PRIORITY "optional")
+set(CPACK_DEBIAN_PACKAGE_DEPENDS "libsoundio2 | libsoundio1, libpulse0, libqt6widgets6 | libqt5widgets5")
+set(CPACK_DEBIAN_PACKAGE_ARCHITECTURE "amd64")
+set(CPACK_DEBIAN_FILE_NAME DEB-DEFAULT)
+
+# Run ldconfig after install so the bundled ONNX Runtime .so is found
+set(CPACK_DEBIAN_PACKAGE_CONTROL_EXTRA "")
+set(CPACK_DEBIAN_PACKAGE_SHLIBDEPS OFF)
+
+include(CPack)
+
+# ============================================================================
 # BUILD INFO
 # ============================================================================
 

@@ -9,6 +9,23 @@
 #include <QMessageBox>
 #include <QApplication>
 #include <QStyle>
+#include <QFileInfo>
+
+static QString findAsset(const QString& relativePath) {
+    // 1. Development path: <exe>/../assets/...
+    QString devPath = QApplication::applicationDirPath() + "/../assets/" + relativePath;
+    if (QFileInfo::exists(devPath)) return devPath;
+
+    // 2. Installed path: /usr/share/neuralmic/...
+    QString sysPath = "/usr/share/neuralmic/" + relativePath;
+    if (QFileInfo::exists(sysPath)) return sysPath;
+
+    // 3. Local share path: /usr/local/share/neuralmic/...
+    QString localPath = "/usr/local/share/neuralmic/" + relativePath;
+    if (QFileInfo::exists(localPath)) return localPath;
+
+    return devPath; // fallback (will fail gracefully)
+}
 
 // Base AudioWorker Implementation
 AudioWorker::AudioWorker(RealtimeDenoiser* denoiser) 
@@ -63,7 +80,7 @@ void MainWindow::setupUi() {
 
     // === Logo ===
     auto* logoLabel = new QLabel(this);
-    QPixmap logo(QApplication::applicationDirPath() + "/../assets/images/logo.png");
+    QPixmap logo(findAsset("images/logo.png"));
     if (!logo.isNull()) {
         logoLabel->setPixmap(logo.scaledToWidth(200, Qt::SmoothTransformation));
         logoLabel->setAlignment(Qt::AlignCenter);
@@ -177,8 +194,7 @@ void MainWindow::setupConnections() {
 }
 
 void MainWindow::loadModel() {
-    const QString modelPath = QApplication::applicationDirPath() + 
-                              "/../assets/models/DeepFilterNetV3.onnx";
+    const QString modelPath = findAsset("models/DeepFilterNetV3.onnx");
     
     if (denoiser_->loadModel(modelPath.toStdString())) 
     {

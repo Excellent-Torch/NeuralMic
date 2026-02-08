@@ -1,0 +1,53 @@
+name: Build & Release .deb
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-deb:
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential cmake g++-13 \
+            libsoundio-dev libpulse-dev \
+            qt6-base-dev \
+            pkg-config
+
+      - name: Configure
+        run: |
+          mkdir build && cd build
+          cmake .. \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_CXX_COMPILER=g++-13 \
+            -DBUILD_GUI=ON \
+            -DFETCH_ONNXRUNTIME=ON
+
+      - name: Build
+        run: cmake --build build -j$(nproc)
+
+      - name: Package .deb
+        run: cd build && cpack -G DEB
+
+      - name: Upload .deb artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: neuralmic-deb
+          path: build/*.deb
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: build/*.deb
+          generate_release_notes: true
