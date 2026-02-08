@@ -32,7 +32,8 @@ jobs:
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_CXX_COMPILER=g++-13 \
             -DBUILD_GUI=ON \
-            -DFETCH_ONNXRUNTIME=ON
+            -DFETCH_ONNXRUNTIME=ON \
+            -DENABLE_MP3=OFF
 
       - name: Build
         run: cmake --build build -j$(nproc)

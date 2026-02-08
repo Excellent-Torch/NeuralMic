@@ -155,6 +155,7 @@ inline bool writeWav(const std::string& filename, const AudioFile& audio) {
 // ============================================================================
 // MP3 Support (Optional - requires minimp3 and LAME)
 // ============================================================================
+#ifdef HAVE_MP3
 #define MINIMP3_IMPLEMENTATION
 #include "External/minimp3.h"
 #include "External/minimp3_ex.h"
@@ -242,9 +243,11 @@ inline bool load(const std::string& filename, AudioFile& audio) {
     if (ext == "wav") {
         return readWav(filename, audio);
     }
+#ifdef HAVE_MP3
     else if (ext == "mp3") {
         return readMp3(filename, audio);
     }
+#endif
     else {
         throw std::runtime_error("Unsupported format: " + ext);
     }
@@ -256,9 +259,11 @@ inline bool save(const std::string& filename, const AudioFile& audio) {
     if (ext == "wav") {
         return writeWav(filename, audio);
     }
+#ifdef HAVE_MP3
     else if (ext == "mp3") {
         return writeMp3(filename, audio);
     }
+#endif
     else {
         throw std::runtime_error("Unsupported format: " + ext);
     }
