@@ -2,7 +2,7 @@
   <img src="assets/images/logo.png" alt="NeuralMic Logo" width="256">
 </p>
 
-<h1 align="center">NeuralMic</h1>
+<h1 align="center"></h1>
 
 <p align="center">
   <strong>Real Time AI based Noise Suppression Client for Linux</strong>
