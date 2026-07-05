@@ -1,10 +1,13 @@
 #pragma once
 
 #include <QMainWindow>
+#include <QSystemTrayIcon>
+#include <QMenu>
 #include <QComboBox>
 #include <QPushButton>
 #include <QLabel>
 #include <QThread>
+#include <QCloseEvent>
 #include <memory>
 #include <atomic>
 
@@ -50,6 +53,11 @@ private slots:
     void onAudioStopped();
     void onAudioError(const QString& msg);
 
+    // Tray slots
+    void onTrayActivated(QSystemTrayIcon::ActivationReason reason);
+    void onShowHide();
+    void onQuit();
+
 private:
     void setupUi();
     void setupConnections();
@@ -57,11 +65,27 @@ private:
     void setRunningState(bool running);
     void updateStatus(const QString& status, bool isError = false);
 
+    // Tray
+    void createTrayIcon();
+    void updateTrayTooltip();
+
+    // Overrides
+    void closeEvent(QCloseEvent* event) override;
+    void changeEvent(QEvent* event) override;
+
     // Audio
     std::unique_ptr<RealtimeDenoiser> denoiser_;
     QThread* audioThread_ = nullptr;
     AudioWorker* audioWorker_ = nullptr;
     std::atomic<bool> running_{false};
+    bool forceQuit_ = false;
+
+    // Tray
+    QSystemTrayIcon* trayIcon_ = nullptr;
+    QMenu* trayMenu_ = nullptr;
+    QAction* showHideAction_ = nullptr;
+    QAction* startStopAction_ = nullptr;
+    QAction* quitAction_ = nullptr;
 
     // UI Components
     struct {

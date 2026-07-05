@@ -10,6 +10,8 @@
 #include <QApplication>
 #include <QStyle>
 #include <QFileInfo>
+#include <QAction>
+#include <QEvent>
 
 static QString findAsset(const QString& relativePath) {
     // 1. Development path: <exe>/../assets/...
@@ -53,6 +55,7 @@ MainWindow::MainWindow(QWidget* parent)
     , denoiser_(std::make_unique<RealtimeDenoiser>())
 {
     setupUi();
+    createTrayIcon();
     setupConnections();
     loadModel();
     onRefreshDevices();
@@ -66,12 +69,22 @@ MainWindow::~MainWindow() {
         audioThread_->quit();
         audioThread_->wait();
     }
+    // Hide tray icon before destruction to avoid lingering icons
+    if (trayIcon_) {
+        trayIcon_->hide();
+    }
 }
 
 void MainWindow::setupUi() {
     setWindowTitle("NeuralMic");
     setMinimumSize(440, 480);
     setMaximumSize(640, 560);
+
+    // Application icon (taskbar / dock / window decoration)
+    QPixmap appIcon(findAsset("images/icon.png"));
+    if (!appIcon.isNull()) {
+        setWindowIcon(QIcon(appIcon));
+    }
 
     auto* central = new QWidget(this);
     auto* layout = new QVBoxLayout(central);
@@ -257,6 +270,12 @@ void MainWindow::onAudioStarted() {
     running_ = true;
     setRunningState(true);
     updateStatus("● Running");
+
+    if (trayIcon_ && trayIcon_->isVisible()) {
+        trayIcon_->showMessage("NeuralMic", "Denoising started",
+                               QSystemTrayIcon::Information, 2000);
+        updateTrayTooltip();
+    }
 }
 
 void MainWindow::onAudioStopped() {
@@ -273,6 +292,12 @@ void MainWindow::onAudioStopped() {
     
     setRunningState(false);
     updateStatus("Stopped");
+
+    if (trayIcon_ && trayIcon_->isVisible()) {
+        trayIcon_->showMessage("NeuralMic", "Denoising stopped",
+                               QSystemTrayIcon::Information, 2000);
+        updateTrayTooltip();
+    }
     
     // Refresh devices since mic_reader was reset
     onRefreshDevices();
@@ -312,6 +337,12 @@ void MainWindow::setRunningState(bool running) {
     ui_.refreshBtn->setEnabled(!running);
     ui_.virtualMicToggle->setEnabled(!running);
     ui_.monitorToggle->setEnabled(!running);
+
+    // Update tray menu action
+    if (startStopAction_) {
+        startStopAction_->setText(running ? "Stop Denoising" : "Start Denoising");
+        startStopAction_->setEnabled(true);
+    }
 }
 
 void MainWindow::onStrengthChanged(int value) {
@@ -344,11 +375,131 @@ void MainWindow::updateStatus(const QString& status, bool isError) {
     if (running_) 
     {
         ui_.status->setStyleSheet("QLabel { color: #27ae60; padding: 4px; font-weight: bold; }");
-        return;
+    }
+    else
+    {
+        ui_.status->setStyleSheet(isError 
+            ? "QLabel { color: #c0392b; padding: 4px; font-weight: bold; }"
+            : "QLabel { color: #666; padding: 4px; }"
+        );
     }
 
-    ui_.status->setStyleSheet(isError 
-        ? "QLabel { color: #c0392b; padding: 4px; font-weight: bold; }"
-        : "QLabel { color: #666; padding: 4px; }"
-    );
+    updateTrayTooltip();
+}
+
+// ============================================================================
+// System Tray Integration
+// ============================================================================
+
+void MainWindow::createTrayIcon() {
+    if (!QSystemTrayIcon::isSystemTrayAvailable()) {
+        return; // Gracefully skip on systems without tray support (e.g. pure Wayland)
+    }
+
+    // Load and scale tray icon from the app icon
+    QIcon trayIcon;
+    QPixmap iconPixmap(findAsset("images/icon.png"));
+    if (!iconPixmap.isNull()) {
+        trayIcon = QIcon(iconPixmap.scaled(22, 22, Qt::KeepAspectRatio, Qt::SmoothTransformation));
+    } else {
+        trayIcon = style()->standardIcon(QStyle::SP_ComputerIcon);
+    }
+
+    trayIcon_ = new QSystemTrayIcon(trayIcon, this);
+    trayIcon_->setToolTip("NeuralMic — Idle");
+
+    // Build tray context menu
+    trayMenu_ = new QMenu(this);
+
+    showHideAction_ = trayMenu_->addAction("Hide Window");
+    connect(showHideAction_, &QAction::triggered, this, &MainWindow::onShowHide);
+
+    trayMenu_->addSeparator();
+
+    startStopAction_ = trayMenu_->addAction("Start Denoising");
+    startStopAction_->setEnabled(false); // Enabled after model loads
+    connect(startStopAction_, &QAction::triggered, this, &MainWindow::onStartStop);
+
+    trayMenu_->addSeparator();
+
+    quitAction_ = trayMenu_->addAction("Quit");
+    connect(quitAction_, &QAction::triggered, this, &MainWindow::onQuit);
+
+    trayIcon_->setContextMenu(trayMenu_);
+
+    connect(trayIcon_, &QSystemTrayIcon::activated,
+            this, &MainWindow::onTrayActivated);
+
+    trayIcon_->show();
+}
+
+void MainWindow::updateTrayTooltip() {
+    if (!trayIcon_) return;
+
+    QString status = running_ ? "● Running" : "Idle";
+    trayIcon_->setToolTip(QString("NeuralMic — %1").arg(status));
+}
+
+void MainWindow::closeEvent(QCloseEvent* event) {
+    if (trayIcon_ && trayIcon_->isVisible() && !forceQuit_) {
+        hide();
+        trayIcon_->showMessage(
+            "NeuralMic",
+            "Still running in background. Use the tray icon to restore or quit.",
+            QSystemTrayIcon::Information, 3000);
+        event->ignore();
+    } else {
+        // Actually quit: stop denoiser cleanly first
+        if (running_) {
+            denoiser_->stop();
+        }
+        if (audioThread_) {
+            audioThread_->quit();
+            audioThread_->wait();
+        }
+        event->accept();
+        qApp->quit();
+    }
+}
+
+void MainWindow::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::WindowStateChange && isMinimized()) {
+        if (trayIcon_ && trayIcon_->isVisible()) {
+            hide();
+            event->ignore();
+            return;
+        }
+    }
+    QMainWindow::changeEvent(event);
+}
+
+void MainWindow::onTrayActivated(QSystemTrayIcon::ActivationReason reason) {
+    switch (reason) {
+    case QSystemTrayIcon::Trigger:      // Left click
+    case QSystemTrayIcon::DoubleClick:  // Double click
+        onShowHide();
+        break;
+    case QSystemTrayIcon::MiddleClick:
+        onStartStop(); // Quick toggle denoising
+        break;
+    default:
+        break;
+    }
+}
+
+void MainWindow::onShowHide() {
+    if (isVisible()) {
+        hide();
+        showHideAction_->setText("Show Window");
+    } else {
+        show();
+        raise();
+        activateWindow();
+        showHideAction_->setText("Hide Window");
+    }
+}
+
+void MainWindow::onQuit() {
+    forceQuit_ = true;
+    close(); // Triggers closeEvent which will now actually quit
 }
