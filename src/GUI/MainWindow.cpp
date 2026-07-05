@@ -194,6 +194,12 @@ void MainWindow::setupUi() {
     ui_.status->setAlignment(Qt::AlignCenter);
     layout->addWidget(ui_.status);
 
+    // === Version label ===
+    auto* versionLabel = new QLabel(QString("v" NEURALMIC_VERSION), this);
+    versionLabel->setStyleSheet("QLabel { color: #999; font-size: 11px; padding: 2px; }");
+    versionLabel->setAlignment(Qt::AlignCenter);
+    layout->addWidget(versionLabel);
+
     layout->addStretch();
     setCentralWidget(central);
 }

@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.28)
 project(NeuralMic
-    VERSION 0.0.1 
+    VERSION 0.1.0 
     LANGUAGES CXX
     DESCRIPTION "Real-time AI-based noise suppression for Linux"
 )
@@ -222,6 +222,11 @@ if(BUILD_GUI)
         NeuralMicLib
         ${QT_WIDGETS}
     )
+
+    # Pass version as preprocessor define so it's available in C++ code
+    target_compile_definitions(NeuralMicGUI PRIVATE
+        NEURALMIC_VERSION="${PROJECT_VERSION}"
+    )
 endif()
 
 # ============================================================================
@@ -245,6 +250,11 @@ install(FILES assets/models/DeepFilterNetV3.onnx
 
 # Install logo
 install(FILES assets/images/logo.png
+    DESTINATION ${CMAKE_INSTALL_DATADIR}/neuralmic/images
+)
+
+# Install application icon
+install(FILES assets/images/icon.png
     DESTINATION ${CMAKE_INSTALL_DATADIR}/neuralmic/images
 )
 

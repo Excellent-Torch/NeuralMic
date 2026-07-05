@@ -7,7 +7,7 @@
 int main(int argc, char* argv[]) {
     QApplication app(argc, argv);
     app.setApplicationName("NeuralMic");
-    app.setApplicationVersion("0.0.1");
+    app.setApplicationVersion(NEURALMIC_VERSION);
 
     // Global application icon fallback (used when no windows are shown)
     QString iconPath = QApplication::applicationDirPath() + "/../assets/images/icon.png";
