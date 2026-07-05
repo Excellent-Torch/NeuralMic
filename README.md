@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/images/logo.png" alt="NeuralMic Logo" width="256">
+  <img src="assets/images/logo-readme.png" alt="NeuralMic Logo" width="256">
 </p>
 
 <h1 align="center"></h1>
