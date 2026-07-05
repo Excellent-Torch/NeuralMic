@@ -6,6 +6,8 @@
 #include <QComboBox>
 #include <QPushButton>
 #include <QLabel>
+#include <QSlider>
+#include <QWidgetAction>
 #include <QThread>
 #include <QCloseEvent>
 #include <memory>
@@ -68,6 +70,7 @@ private:
     // Tray
     void createTrayIcon();
     void updateTrayTooltip();
+    void syncTrayStrength(int value);
 
     // Overrides
     void closeEvent(QCloseEvent* event) override;
@@ -86,6 +89,7 @@ private:
     QAction* showHideAction_ = nullptr;
     QAction* startStopAction_ = nullptr;
     QAction* quitAction_ = nullptr;
+    QMenu* trayStrengthMenu_ = nullptr;
 
     // UI Components
     struct {

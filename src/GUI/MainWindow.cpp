@@ -12,6 +12,8 @@
 #include <QFileInfo>
 #include <QAction>
 #include <QEvent>
+#include <QSlider>
+#include <QWidgetAction>
 
 static QString findAsset(const QString& relativePath) {
     // 1. Development path: <exe>/../assets/...
@@ -218,9 +220,15 @@ void MainWindow::loadModel() {
     if (denoiser_->loadModel(modelPath.toStdString())) 
     {
         updateStatus("Model loaded");
+        if (startStopAction_) {
+            startStopAction_->setEnabled(true);
+        }
     } else {
         updateStatus("Failed to load model", true);
         ui_.startBtn->setEnabled(false);
+        if (startStopAction_) {
+            startStopAction_->setEnabled(false);
+        }
     }
 }
 
@@ -241,8 +249,19 @@ void MainWindow::onRefreshDevices() {
 void MainWindow::onStartStop() {
     if (!running_) 
     {
-        // Configure denoiser
-        denoiser_->selectMicrophone(ui_.micCombo->currentIndex());
+        // Validate device selection
+        if (ui_.micCombo->count() == 0 || ui_.micCombo->currentIndex() < 0) {
+            QMessageBox::warning(this, "No Microphone",
+                "No microphone selected. Please select an input device and try again.");
+            return;
+        }
+
+        // Configure denoiser — check return values
+        if (!denoiser_->selectMicrophone(ui_.micCombo->currentIndex())) {
+            QMessageBox::warning(this, "Device Error",
+                "Failed to select the chosen microphone. Please refresh devices and try again.");
+            return;
+        }
         denoiser_->selectSpeaker(ui_.speakerCombo->currentIndex());
         denoiser_->enableMonitoring(ui_.monitorToggle->isChecked());
         denoiser_->enableVirtualMic(ui_.virtualMicToggle->isChecked());
@@ -263,6 +282,11 @@ void MainWindow::onStartStop() {
         updateStatus("Starting...");
         audioThread_->start();
     } else {
+        // Guard against double-stop
+        if (!denoiser_->isRunning()) {
+            return;
+        }
+
         ui_.startBtn->setEnabled(false);
         updateStatus("Stopping...");
         
@@ -349,6 +373,7 @@ void MainWindow::setRunningState(bool running) {
         startStopAction_->setText(running ? "Stop Denoising" : "Start Denoising");
         startStopAction_->setEnabled(true);
     }
+
 }
 
 void MainWindow::onStrengthChanged(int value) {
@@ -359,6 +384,8 @@ void MainWindow::onStrengthChanged(int value) {
         float db = -static_cast<float>(value) * 0.3f;
         denoiser_->setNoiseSuppressionStrength(db);
     }
+    // Sync tray slider bidirectionally
+    syncTrayStrength(value);
 }
 
 void MainWindow::onMonitorToggled(bool checked) {
@@ -423,8 +450,47 @@ void MainWindow::createTrayIcon() {
     trayMenu_->addSeparator();
 
     startStopAction_ = trayMenu_->addAction("Start Denoising");
-    startStopAction_->setEnabled(false); // Enabled after model loads
+    // Enabled state is set by loadModel() after model loads
     connect(startStopAction_, &QAction::triggered, this, &MainWindow::onStartStop);
+
+    trayMenu_->addSeparator();
+
+    // --- Strength submenu (reliable across all Linux DEs) ---
+    {
+        trayStrengthMenu_ = new QMenu("Strength", trayMenu_);
+
+        // Preset strength levels with their dB equivalents
+        const struct { int pct; const char* label; } presets[] = {
+            {0,   " 0%  (0 dB)"},
+            {25,  "25%  (−7.5 dB)"},
+            {50,  "50%  (−15 dB)"},
+            {75,  "75%  (−22.5 dB)"},
+            {100, "100% (−30 dB)"},
+        };
+
+        for (const auto& p : presets) {
+            auto* action = trayStrengthMenu_->addAction(p.label);
+            action->setCheckable(true);
+            action->setData(p.pct);
+            connect(action, &QAction::triggered, this, [this, pct = p.pct]() {
+                // Apply strength to denoiser
+                if (denoiser_) {
+                    float db = -static_cast<float>(pct) * 0.3f;
+                    denoiser_->setNoiseSuppressionStrength(db);
+                }
+                // Sync main UI (block signals to avoid re-entrant update)
+                ui_.strengthSlider->blockSignals(true);
+                ui_.strengthSlider->setValue(pct);
+                ui_.strengthSlider->blockSignals(false);
+                ui_.strengthValue->setText(QString("%1%").arg(pct));
+                // Update submenu checkmarks and title
+                syncTrayStrength(pct);
+            });
+        }
+
+        trayMenu_->addMenu(trayStrengthMenu_);
+        syncTrayStrength(ui_.strengthSlider->value());
+    }
 
     trayMenu_->addSeparator();
 
@@ -444,6 +510,30 @@ void MainWindow::updateTrayTooltip() {
 
     QString status = running_ ? "● Running" : "Idle";
     trayIcon_->setToolTip(QString("NeuralMic — %1").arg(status));
+}
+
+void MainWindow::syncTrayStrength(int value) {
+    if (!trayStrengthMenu_) return;
+
+    // Update submenu title to reflect current strength
+    trayStrengthMenu_->setTitle(QString("Strength  —  %1%").arg(value));
+
+    // Update checkmarks: check the closest preset to the current value
+    const int presets[] = {0, 25, 50, 75, 100};
+    int closest = presets[0];
+    int minDiff = std::abs(value - presets[0]);
+    for (int p : presets) {
+        int diff = std::abs(value - p);
+        if (diff < minDiff) {
+            minDiff = diff;
+            closest = p;
+        }
+    }
+
+    for (QAction* action : trayStrengthMenu_->actions()) {
+        bool match = (action->data().toInt() == closest);
+        action->setChecked(match);
+    }
 }
 
 void MainWindow::closeEvent(QCloseEvent* event) {
