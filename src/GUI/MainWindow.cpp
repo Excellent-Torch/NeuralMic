@@ -70,27 +70,28 @@ MainWindow::~MainWindow() {
 
 void MainWindow::setupUi() {
     setWindowTitle("NeuralMic");
-    setMinimumSize(420, 400);
-    setMaximumSize(600, 480);
+    setMinimumSize(440, 480);
+    setMaximumSize(640, 560);
 
     auto* central = new QWidget(this);
     auto* layout = new QVBoxLayout(central);
-    layout->setSpacing(8);
-    layout->setContentsMargins(12, 12, 12, 12);
+    layout->setSpacing(6);
+    layout->setContentsMargins(16, 14, 16, 14);
 
     // === Logo ===
     auto* logoLabel = new QLabel(this);
     QPixmap logo(findAsset("images/logo.png"));
     if (!logo.isNull()) {
-        logoLabel->setPixmap(logo.scaledToWidth(200, Qt::SmoothTransformation));
+        logoLabel->setPixmap(logo.scaledToWidth(280, Qt::SmoothTransformation));
         logoLabel->setAlignment(Qt::AlignCenter);
+        logoLabel->setContentsMargins(0, 4, 0, 8);
         layout->addWidget(logoLabel);
     }
 
     // === Device Selection ===
     auto* deviceGroup = new QGroupBox("Audio Devices", this);
     auto* deviceLayout = new QVBoxLayout(deviceGroup);
-    deviceLayout->setSpacing(8);
+    deviceLayout->setSpacing(6);
 
     // Microphone row
     auto* micRow = new QHBoxLayout();
@@ -130,26 +131,25 @@ void MainWindow::setupUi() {
     // === Options ===
     auto* optionsGroup = new QGroupBox("Options", this);
     auto* optionsLayout = new QHBoxLayout(optionsGroup);
-    optionsLayout->addStretch();
-    optionsLayout->setSpacing(20);
+    optionsLayout->setSpacing(24);
 
-    // Monitor toggle row
+    // Monitor toggle
     auto* monitorRow = new QHBoxLayout();
-    monitorRow->addWidget(new QLabel("Monitor Output :", this));
-    //monitorRow->addStretch();
+    monitorRow->addWidget(new QLabel("Monitor:", this));
     ui_.monitorToggle = new SwitchToggle(this);
     ui_.monitorToggle->setToolTip("Hear processed audio through speakers");
     monitorRow->addWidget(ui_.monitorToggle);
+    monitorRow->addStretch();
     optionsLayout->addLayout(monitorRow);
 
-    // Virtual mic toggle row
+    // Virtual mic toggle
     auto* virtualMicRow = new QHBoxLayout();
-    virtualMicRow->addWidget(new QLabel("Virtual Mic :", this));
-    //virtualMicRow->addStretch();
+    virtualMicRow->addWidget(new QLabel("Virtual Mic:", this));
     ui_.virtualMicToggle = new SwitchToggle(this);
     ui_.virtualMicToggle->setChecked(true);
     ui_.virtualMicToggle->setToolTip("Use in Discord, games, etc.");
     virtualMicRow->addWidget(ui_.virtualMicToggle);
+    virtualMicRow->addStretch();
     optionsLayout->addLayout(virtualMicRow);
 
     layout->addWidget(optionsGroup);
